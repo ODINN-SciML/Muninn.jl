@@ -1,5 +1,6 @@
 __precompile__() # this module is safe to precompile
-module Munnin
+
+module Muninn
 
 # ##############################################
 # ###########       PACKAGES     ##############
