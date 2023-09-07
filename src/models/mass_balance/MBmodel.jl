@@ -18,7 +18,7 @@ struct TImodel1{F <: AbstractFloat} <: TImodel
 end
 
 """
-    TImodel1(;
+    TImodel1(params::Parameters;
         DDF::Float64 = 5.0/1000.0,
         acc_factor::Float64 = 1.0/1000.0
         )
@@ -35,9 +35,9 @@ function TImodel1(params::Parameters;
 
     # Build the simulation parameters based on input values
     ft = params.simulation.float_type
-    TI_model = TImodel1{ft}(DDF, acc_factor)
+    TI1_model = TImodel1{ft}(DDF, acc_factor)
 
-    return TI_model
+    return TI1_model
 end
 
 # Temperature-index model with 2 melt factors
@@ -48,7 +48,7 @@ struct TImodel2{F <: AbstractFloat} <: TImodel
 end
 
 """
-    TImodel2(;
+    TImodel2(params::Parameters;
         DDF_snow::Float64 = 3.0/1000.0,
         DDF_ice::Float64 = 6.0/1000.0,
         acc_factor::Float64 = 1.0/1000.0
@@ -61,15 +61,21 @@ Keyword arguments
     - `DDF_ice`: Degree-day factor for ice.
     - `acc_factor`: Accumulation factor
 """
-function TImodel2(;
+function TImodel2(params::Parameters;
             DDF_snow::F = 3.0/1000.0,
             DDF_ice::F = 6.0/1000.0,
             acc_factor::F = 1.0/1000.0) where {F <: AbstractFloat}
 
     # Build the simulation parameters based on input values
-    TI_model = TImodel2{F}(DDF_snow, DDF_ice, acc_factor)
+    ft = params.simulation.float_type
+    TI2_model = TImodel2{ft}(DDF_snow, DDF_ice, acc_factor)
 
-    return TI_model
+    return TI2_model
 end
+
+Base.:(==)(a::TImodel1, b::TImodel1) = a.DDF == b.DDF && a.acc_factor == b.acc_factor 
+
+Base.:(==)(a::TImodel2, b::TImodel2) = a.DDF_snow == b.DDF_snow && a.DDF_ice == b.DDF_ice && 
+                                        a.acc_factor == b.acc_factor 
 
 
