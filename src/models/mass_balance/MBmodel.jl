@@ -78,4 +78,4 @@ Base.:(==)(a::TImodel1, b::TImodel1) = a.DDF == b.DDF && a.acc_factor == b.acc_f
 Base.:(==)(a::TImodel2, b::TImodel2) = a.DDF_snow == b.DDF_snow && a.DDF_ice == b.DDF_ice && 
                                         a.acc_factor == b.acc_factor 
 
-
+include("mass_balance_utils.jl")
