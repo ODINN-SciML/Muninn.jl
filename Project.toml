@@ -1,7 +1,7 @@
 name = "Muninn"
 uuid = "4b816528-16ba-4e32-9a2e-3c1bc2049d3a"
 authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>"]
-version = "0.2.0"
+version = "0.2.1"
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
