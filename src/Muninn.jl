@@ -8,6 +8,7 @@ module Muninn
 using Infiltrator
 import Pkg
 using Distributed
+using Dates
 using PyCall
 
 ### ODINN.jl dependencies ###
