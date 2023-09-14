@@ -1,4 +1,6 @@
 
+export compute_MB, MB_timestep!, MB_timestep
+
 function compute_MB(mb_model::TImodel1, climate_2D_period::Climate2Dstep)
     return ((mb_model.acc_factor .* climate_2D_period.snow) .- (mb_model.DDF .* climate_2D_period.PDD))
 end
