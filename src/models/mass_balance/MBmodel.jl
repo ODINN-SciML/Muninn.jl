@@ -1,8 +1,8 @@
 
-export TImodel1, TImodel2
+export TImodel1, TImodel2, MBmodel
 
 # Abstract type as a parent type for Mass Balance models
-abstract type MBmodel end
+abstract type MBmodel <: AbstractModel end 
 
 ###############################################
 ########## TEMPERATURE-INDEX MODELS ###########
