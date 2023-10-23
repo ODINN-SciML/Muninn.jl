@@ -30,7 +30,7 @@ Keyword arguments
     - `acc_factor`: Accumulation factor
 """
 function TImodel1(params::Parameters;
-            DDF::F = 5.0/1000.0,
+            DDF::F = 7.0/1000.0,
             acc_factor::F = 1.0/1000.0) where {F <: AbstractFloat}
 
     # Build the simulation parameters based on input values
