@@ -29,7 +29,7 @@ Keyword arguments
     - `DDF`: Single degree-day factor, for both snow and ice.
     - `acc_factor`: Accumulation factor
 """
-function TImodel1(params::Parameters;
+function TImodel1(params::Sleipnir.Parameters;
             DDF::F = 7.0/1000.0,
             acc_factor::F = 1.0/1000.0) where {F <: AbstractFloat}
 
