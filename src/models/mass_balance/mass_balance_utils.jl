@@ -16,7 +16,7 @@ function MB_timestep(model::Model, glacier::G, step::F, t::F) where {F <: Abstra
 end
 
          
-function MB_timestep!(model::Model, glacier::G, step::F, t::F) where {F <: AbstractFloat, G <: AbstractGlacier}
+function MB_timestep!(model::Model, glacier::G, step::F, t; batch_id::Union{Nothing, I} = nothing) where {I <: Integer, F <: AbstractFloat, G <: AbstractGlacier}
     # First we get the dates of the current time and the previous step
     period = partial_year(Day, t - step):Day(1):partial_year(Day, t)
 
@@ -24,7 +24,11 @@ function MB_timestep!(model::Model, glacier::G, step::F, t::F) where {F <: Abstr
 
     # Convert climate dataset to 2D based on the glacier's DEM
     downscale_2D_climate!(glacier)
-
-    model.iceflow.MB .= compute_MB(model.mass_balance, glacier.climate.climate_2D_step)
+    # Simulations using Reverse Diff require an iceflow and mass balance model per glacier
+    if isnothing(batch_id)
+        model.iceflow.MB .= compute_MB(model.mass_balance, glacier.climate.climate_2D_step)
+    else
+        model.iceflow[batch_id].MB .= compute_MB(model.mass_balance[batch_id], glacier.climate.climate_2D_step)
+    end
 end
 
