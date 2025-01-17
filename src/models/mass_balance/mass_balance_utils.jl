@@ -8,14 +8,14 @@ end
 function MB_timestep(model::Model, glacier::G, step::F, t::F) where {F <: AbstractFloat, G <: AbstractGlacier}
     # First we get the dates of the current time and the previous step
     period = partial_year(Day, t - step):Day(1):partial_year(Day, t)
-    climate_step::PyObject = get_cumulative_climate(glacier.climate.sel(time=period))
+    climate_step::Dict{String, Any} = get_cumulative_climate(glacier.climate[At(period)])
     # Convert climate dataset to 2D based on the glacier's DEM
-    climate_2D_step::PyObject = downscale_2D_climate(climate_step, glacier)
+    climate_2D_step::Climate2Dstep = downscale_2D_climate(climate_step, glacier)
     MB::Matrix{F} = compute_MB(model.mb_model, climate_2D_step)
     return MB
 end
 
-         
+
 function MB_timestep!(model::Model, glacier::G, step::F, t; batch_id::Union{Nothing, I} = nothing) where {I <: Integer, F <: AbstractFloat, G <: AbstractGlacier}
     # First we get the dates of the current time and the previous step
     period = partial_year(Day, t - step):Day(1):partial_year(Day, t)
