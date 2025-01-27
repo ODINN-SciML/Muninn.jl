@@ -2,7 +2,7 @@
 export TImodel1, TImodel2, MBmodel
 
 # Abstract type as a parent type for Mass Balance models
-abstract type MBmodel <: AbstractModel end 
+abstract type MBmodel <: AbstractModel end
 
 ###############################################
 ########## TEMPERATURE-INDEX MODELS ###########
@@ -18,8 +18,8 @@ struct TImodel1{F <: AbstractFloat} <: TImodel
 end
 
 """
-    TImodel1(params::Parameters;
-        DDF::Float64 = 5.0/1000.0,
+    TImodel1(params::Sleipnir.Parameters;
+        DDF::Float64 = 7.0/1000.0,
         acc_factor::Float64 = 1.0/1000.0
         )
 Temperature-index model with a single degree-day factor.
