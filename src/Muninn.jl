@@ -9,6 +9,8 @@ using Infiltrator
 import Pkg
 using Distributed
 using Dates
+using Rasters
+import NCDatasets
 
 ### ODINN.jl dependencies ###
 using Reexport
