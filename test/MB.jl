@@ -30,7 +30,6 @@ function apply_MB_test(save_refs::Bool = false)
     end
 
     mb_ref = load(joinpath(Muninn.root_dir, "test/data/MB/MB_model.jld2"))["mb"]
-
     @test mb == mb_ref
 
 end
