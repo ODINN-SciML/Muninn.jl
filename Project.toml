@@ -16,7 +16,7 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
 Infiltrator = "1.8"
-JLD2 = "0.4"
+JLD2 = "0.4, 0.5"
 Reexport = "1"
 Revise = "3"
 Sleipnir = "0.8"
