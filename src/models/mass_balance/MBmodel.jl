@@ -34,7 +34,7 @@ function TImodel1(params::Sleipnir.Parameters;
             acc_factor::F = 1.0/1000.0) where {F <: AbstractFloat}
 
     # Build the simulation parameters based on input values
-    ft = params.simulation.float_type
+    ft = Sleipnir.Float
     TI1_model = TImodel1{ft}(DDF, acc_factor)
 
     return TI1_model
@@ -67,7 +67,7 @@ function TImodel2(params::Parameters;
             acc_factor::F = 1.0/1000.0) where {F <: AbstractFloat}
 
     # Build the simulation parameters based on input values
-    ft = params.simulation.float_type
+    ft = Sleipnir.Float
     TI2_model = TImodel2{ft}(DDF_snow, DDF_ice, acc_factor)
 
     return TI2_model
