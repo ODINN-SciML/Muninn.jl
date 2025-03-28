@@ -16,7 +16,7 @@ function apply_MB_test(save_refs::Bool = false)
             test_mode = true,
             rgi_paths = rgi_paths),
     )
-    glaciers = initialize_glaciers(rgi_ids, params; test=true)
+    glaciers = initialize_glaciers(rgi_ids, params)
     TI1 = TImodel1(params)
     model = Model(nothing, TI1, nothing) # This test only needs a mass balance model
 
