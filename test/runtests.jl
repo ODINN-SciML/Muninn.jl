@@ -1,7 +1,9 @@
 import Pkg
 Pkg.activate(dirname(Base.current_project()))
 
-using Revise
+if !parse(Bool, get(ENV, "CI", "false"))
+    using Revise
+end
 using Muninn
 using Test
 using JLD2
