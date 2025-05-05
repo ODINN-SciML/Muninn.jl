@@ -3,11 +3,11 @@
 function TI_creation_default_test(save_refs::Bool = false)
 
     params = Parameters()
-    @inferred Parameters()
+    JET.@test_opt target_modules=(Sleipnir,Muninn) Parameters()
     TI1 = TImodel1(params)
-    @inferred TImodel1(params)
+    JET.@test_opt TImodel1(params)
     TI2 = TImodel2(params)
-    @inferred TImodel2(params)
+    JET.@test_opt TImodel2(params)
 
     if save_refs
         jldsave(joinpath(Muninn.root_dir, "test/data/TI/TI1_model_default.jld2"); TI1)
@@ -25,13 +25,13 @@ end
 function TI_creation_values_test(save_refs::Bool = false)
 
     params = Parameters()
-    @inferred Parameters()
+    JET.@test_opt target_modules=(Sleipnir,Muninn) Parameters()
     TI1 = TImodel1(
         params;
         DDF = 6.0/1000.0,
         acc_factor = 1.2/1000.0
     )
-    @inferred TImodel1(
+    JET.@test_opt TImodel1(
         params;
         DDF = 6.0/1000.0,
         acc_factor = 1.2/1000.0
@@ -42,7 +42,7 @@ function TI_creation_values_test(save_refs::Bool = false)
         DDF_ice = 6.0/1000.0,
         acc_factor = 1.2/1000.0
     )
-    @inferred TImodel2(
+    JET.@test_opt TImodel2(
         params;
         DDF_snow = 3.0/1000.0,
         DDF_ice = 6.0/1000.0,
