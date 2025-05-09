@@ -9,6 +9,7 @@ using Test
 using JLD2
 using Infiltrator
 using Dates
+using JET
 
 include("TI.jl")
 include("MB.jl")

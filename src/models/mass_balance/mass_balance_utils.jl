@@ -86,5 +86,5 @@ function MB_timestep!(model::Model, glacier::G, step::F, t; batch_id::Union{Noth
     else
         model.iceflow[batch_id].MB .= compute_MB(model.mass_balance[batch_id], glacier.climate.climate_2D_step)
     end
+    return nothing # For type stability
 end
-
