@@ -57,6 +57,7 @@ end
 Simulates a mass balance timestep for a given glacier model.
 
 # Arguments
+- `cache`: The model cache to update.
 - `model::Model`: The glacier model containing iceflow and mass balance information.
 - `glacier::G`: The glacier object containing climate and DEM data.
 - `step::F`: The timestep duration.
@@ -72,7 +73,7 @@ This function performs the following steps:
 
 If `batch_id` is provided, the function updates the mass balance for the specified batch; otherwise, it updates the mass balance for the entire model.
 """
-function MB_timestep!(model::Model, glacier::G, step::F, t; batch_id::Union{Nothing, I} = nothing) where {I <: Integer, F <: AbstractFloat, G <: AbstractGlacier}
+function MB_timestep!(cache, model::Model, glacier::G, step::F, t; batch_id::Union{Nothing, I} = nothing) where {I <: Integer, F <: AbstractFloat, G <: AbstractGlacier}
     # First we get the dates of the current time and the previous step
     period = partial_year(Day, t - step):Day(1):partial_year(Day, t)
 
@@ -82,9 +83,9 @@ function MB_timestep!(model::Model, glacier::G, step::F, t; batch_id::Union{Noth
     downscale_2D_climate!(glacier)
     # Simulations using Reverse Diff require an iceflow and mass balance model per glacier
     if isnothing(batch_id)
-        model.iceflow.MB .= compute_MB(model.mass_balance, glacier.climate.climate_2D_step)
+        cache.iceflow.MB .= compute_MB(model.mass_balance, glacier.climate.climate_2D_step)
     else
-        model.iceflow[batch_id].MB .= compute_MB(model.mass_balance[batch_id], glacier.climate.climate_2D_step)
+        cache.iceflow[batch_id].MB .= compute_MB(model.mass_balance[batch_id], glacier.climate.climate_2D_step)
     end
     return nothing # For type stability
 end
