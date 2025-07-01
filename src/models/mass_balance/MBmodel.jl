@@ -110,9 +110,28 @@ function TImodel2(params::Parameters;
     return TI2_model
 end
 
-Base.:(==)(a::TImodel1, b::TImodel1) = a.DDF == b.DDF && a.acc_factor == b.acc_factor 
+Base.:(==)(a::TImodel1, b::TImodel1) = a.DDF == b.DDF && a.acc_factor == b.acc_factor
 
-Base.:(==)(a::TImodel2, b::TImodel2) = a.DDF_snow == b.DDF_snow && a.DDF_ice == b.DDF_ice && 
-                                        a.acc_factor == b.acc_factor 
+Base.:(==)(a::TImodel2, b::TImodel2) = a.DDF_snow == b.DDF_snow && a.DDF_ice == b.DDF_ice &&
+                                        a.acc_factor == b.acc_factor
+
+
+# Display setup
+function Base.show(io::IO, model::TImodel1)
+    println("Temperature index mass balance model TImodel1")
+    print("   DDF = ")
+    println(model.DDF)
+    print("   acc_factor = ")
+    print(model.acc_factor)
+end
+function Base.show(io::IO, model::TImodel2)
+    println("Temperature index mass balance model TImodel2")
+    print("   DDF_snow = ")
+    println(model.DDF_snow)
+    print("   DDF_ice = ")
+    println(model.DDF_ice)
+    print("   acc_factor = ")
+    print(model.acc_factor)
+end
 
 include("mass_balance_utils.jl")
