@@ -40,7 +40,7 @@ jobs:
     needs: pr-check
     # Skip CI if PR exists (on push only)
     # Or if there is a label that states the CI is broken because a dependency needs a new release
-    if: (github.event_name != 'push' || needs.pr-check.outputs.skip == 'false') && ${{ !contains(github.event.pull_request.labels.*.name, 'CI needs new release') }}
+    if: ${{ (github.event_name != 'push' || needs.pr-check.outputs.skip == 'false') && !contains(github.event.pull_request.labels.*.name, 'CI needs new release') }}
     runs-on: ${{ matrix.os }}
     defaults:
        run:
