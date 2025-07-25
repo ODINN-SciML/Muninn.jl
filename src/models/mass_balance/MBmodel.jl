@@ -115,12 +115,18 @@ Base.:(==)(a::TImodel2, b::TImodel2) = a.DDF_snow == b.DDF_snow && a.DDF_ice == 
 
 
 # Display setup
+function Base.show(io::IO, type::MIME"text/plain", model::TImodel1)
+    Base.show(io, model)
+end
 function Base.show(io::IO, model::TImodel1)
     println("Temperature index mass balance model TImodel1")
     print("   DDF = ")
     println(model.DDF)
     print("   acc_factor = ")
     print(model.acc_factor)
+end
+function Base.show(io::IO, type::MIME"text/plain", model::TImodel2)
+    Base.show(io, model)
 end
 function Base.show(io::IO, model::TImodel2)
     println("Temperature index mass balance model TImodel2")
