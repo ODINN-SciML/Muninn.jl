@@ -45,7 +45,7 @@ function MB_timestep(model::Model, glacier::G, step::F, t::F) where {F <: Abstra
     period = partial_year(Day, t - step):Day(1):partial_year(Day, t)
     get_cumulative_climate!(glacier.climate, period)
     # Convert climate dataset to 2D based on the glacier's DEM
-    climate_2D_step::Climate2Dstep = downscale_2D_climate(glacier.climate.climate_step, glacier.S, glacier.Coords)
+    climate_2D_step = downscale_2D_climate(glacier.climate.climate_step, glacier.S, glacier.Coords)
     MB::Matrix{F} = compute_MB(model.mass_balance, climate_2D_step)
     return MB
 end
