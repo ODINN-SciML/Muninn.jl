@@ -4,9 +4,9 @@ export TImodel1, TImodel2, MBmodel
 """
     MBmodel <: AbstractModel
 
-An abstract type representing a mass balance model in the Muninn package. 
-This serves as a base type for all specific mass balance models, ensuring 
-they adhere to a common interface and can be used interchangeably within 
+An abstract type representing a mass balance model in the Muninn package.
+This serves as a base type for all specific mass balance models, ensuring
+they adhere to a common interface and can be used interchangeably within
 the ODINN framework.
 """
 abstract type MBmodel <: AbstractModel end
@@ -18,8 +18,8 @@ abstract type MBmodel <: AbstractModel end
 """
     TImodel <: MBmodel
 
-An abstract type representing a temperature index mass balance models within the ODINN framework. 
-This type serves as a parent type for more specialized mass balance models, ensuring they adhere to 
+An abstract type representing a temperature index mass balance models within the ODINN framework.
+This type serves as a parent type for more specialized mass balance models, ensuring they adhere to
 a common interface defined by the `MBmodel` abstract type.
 """
 abstract type TImodel <: MBmodel end

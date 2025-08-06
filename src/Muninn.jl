@@ -26,4 +26,3 @@ const global root_plots::String = joinpath(root_dir, "plots")
 include("models/mass_balance/MBmodel.jl")
 
 end # module
-
