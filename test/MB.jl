@@ -25,7 +25,7 @@ function apply_MB_test(save_refs::Bool = false)
             rgi_paths = rgi_paths),
     )
     glacier = initialize_glaciers(rgi_ids, params)[1]
-    JET.@test_opt broken=true target_modules=(Sleipnir,Muninn) initialize_glaciers(rgi_ids, params) # For the moment this is not type stable because of the readings (type of CSV files and RasterStack cannot be determined at compilation time)
+    # JET.@test_opt broken=true target_modules=(Sleipnir,Muninn) initialize_glaciers(rgi_ids, params) # For the moment this is not type stable because of the readings (type of CSV files and RasterStack cannot be determined at compilation time)
     TI1 = TImodel1(params)
     JET.@test_opt TImodel1(params)
     model = Model(nothing, TI1, nothing) # This test only needs a mass balance model
