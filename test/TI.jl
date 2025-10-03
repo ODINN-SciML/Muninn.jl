@@ -1,9 +1,7 @@
 
-
 function TI_creation_default_test(save_refs::Bool = false)
-
     params = Parameters()
-    JET.@test_opt target_modules=(Sleipnir,Muninn) Parameters()
+    JET.@test_opt target_modules=(Sleipnir, Muninn) Parameters()
     TI1 = TImodel1(params)
     JET.@test_opt TImodel1(params)
     TI2 = TImodel2(params)
@@ -19,13 +17,11 @@ function TI_creation_default_test(save_refs::Bool = false)
 
     @test TI1 == TI1_ref
     @test TI2 == TI2_ref
-
 end
 
 function TI_creation_values_test(save_refs::Bool = false)
-
     params = Parameters()
-    JET.@test_opt target_modules=(Sleipnir,Muninn) Parameters()
+    JET.@test_opt target_modules=(Sleipnir, Muninn) Parameters()
     TI1 = TImodel1(
         params;
         DDF = 6.0/1000.0,
@@ -59,6 +55,4 @@ function TI_creation_values_test(save_refs::Bool = false)
 
     @test TI1 == TI1_ref
     @test TI2 == TI2_ref
-
 end
-
