@@ -124,27 +124,23 @@ function Base.:(==)(a::TImodel2, b::TImodel2)
 end
 
 # Display setup
-function Base.show(io::IO, type::MIME"text/plain", model::TImodel1)
-    Base.show(io, model)
-end
+Base.show(io::IO, type::MIME"text/plain", model::TImodel1) = Base.show(io, model)
 function Base.show(io::IO, model::TImodel1)
-    println("Temperature index mass balance model TImodel1")
-    print("   DDF = ")
-    println(model.DDF)
-    print("   acc_factor = ")
-    print(model.acc_factor)
+    println(io, "Temperature index mass balance model TImodel1")
+    print(io, "   DDF = ")
+    println(io, model.DDF)
+    print(io, "   acc_factor = ")
+    print(io, model.acc_factor)
 end
-function Base.show(io::IO, type::MIME"text/plain", model::TImodel2)
-    Base.show(io, model)
-end
+Base.show(io::IO, type::MIME"text/plain", model::TImodel2) = Base.show(io, model)
 function Base.show(io::IO, model::TImodel2)
-    println("Temperature index mass balance model TImodel2")
-    print("   DDF_snow = ")
-    println(model.DDF_snow)
-    print("   DDF_ice = ")
-    println(model.DDF_ice)
-    print("   acc_factor = ")
-    print(model.acc_factor)
+    println(io, "Temperature index mass balance model TImodel2")
+    print(io, "   DDF_snow = ")
+    println(io, model.DDF_snow)
+    print(io, "   DDF_ice = ")
+    println(io, model.DDF_ice)
+    print(io, "   acc_factor = ")
+    print(io, model.acc_factor)
 end
 
 include("mass_balance_utils.jl")
