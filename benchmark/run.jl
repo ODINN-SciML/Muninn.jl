@@ -13,11 +13,11 @@ rgi_ids = ["RGI60-11.03638"]
 rgi_paths = get_rgi_paths()
 params = Parameters(
     simulation = SimulationParameters(
-        use_MB=true,
-        use_velocities=false,
-        tspan=(2010.0, 2015.0),
-        test_mode = true,
-        rgi_paths = rgi_paths),
+    use_MB = true,
+    use_velocities = false,
+    tspan = (2010.0, 2015.0),
+    test_mode = true,
+    rgi_paths = rgi_paths),
 )
 glaciers = initialize_glaciers(rgi_ids, params)
 TI1 = TImodel1(params)

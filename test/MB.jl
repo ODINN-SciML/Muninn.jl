@@ -1,7 +1,12 @@
+mutable struct fakeIceflowCache{F <: AbstractFloat}
+    MB::Matrix{F}
+end
 
+mutable struct fakeCache{ICEFLOW}
+    iceflow::ICEFLOW
+end
 
 function apply_MB_test(save_refs::Bool = false)
-
     rgi_ids = ["RGI60-11.03638"]
 
     rgi_paths = get_rgi_paths()
@@ -10,19 +15,19 @@ function apply_MB_test(save_refs::Bool = false)
 
     params = Parameters(
         simulation = SimulationParameters(
-            use_MB=true,
-            use_velocities=false,
-            tspan=(2010.0, 2015.0),
-            test_mode = true,
-            rgi_paths = rgi_paths),
+        use_MB = true,
+        use_velocities = false,
+        tspan = (2010.0, 2015.0),
+        test_mode = true,
+        rgi_paths = rgi_paths),
     )
-    JET.@test_opt target_modules=(Sleipnir,Muninn) Parameters(
+    JET.@test_opt target_modules=(Sleipnir, Muninn) Parameters(
         simulation = SimulationParameters(
-            use_MB=true,
-            use_velocities=false,
-            tspan=(2010.0, 2015.0),
-            test_mode = true,
-            rgi_paths = rgi_paths),
+        use_MB = true,
+        use_velocities = false,
+        tspan = (2010.0, 2015.0),
+        test_mode = true,
+        rgi_paths = rgi_paths),
     )
     glacier = initialize_glaciers(rgi_ids, params)[1]
     # JET.@test_opt broken=true target_modules=(Sleipnir,Muninn) initialize_glaciers(rgi_ids, params) # For the moment this is not type stable because of the readings (type of CSV files and RasterStack cannot be determined at compilation time)
@@ -34,7 +39,15 @@ function apply_MB_test(save_refs::Bool = false)
     t = 2015.0
     step = 1.0/12.0
     mb = MB_timestep(model, glacier, step, t)
-    JET.@test_opt target_modules=(Sleipnir,Muninn) MB_timestep(model, glacier, step, t)
+    JET.@test_opt target_modules=(Sleipnir, Muninn) MB_timestep(model, glacier, step, t)
+
+    iceflowCache = fakeIceflowCache{Sleipnir.Float}(zero(glacier.H₀))
+    cache = fakeCache{typeof(iceflowCache)}(iceflowCache)
+
+    MB_timestep!(cache, model, glacier, step, t)
+    @assert mb==cache.iceflow.MB
+    JET.@test_opt target_modules=(Sleipnir, Muninn) MB_timestep!(
+        cache, model, glacier, step, t)
 
     if save_refs
         jldsave(joinpath(Muninn.root_dir, "test/data/MB/MB_model.jld2"); mb)
@@ -42,5 +55,4 @@ function apply_MB_test(save_refs::Bool = false)
 
     mb_ref = load(joinpath(Muninn.root_dir, "test/data/MB/MB_model.jld2"))["mb"]
     @test mb == mb_ref
-
 end
