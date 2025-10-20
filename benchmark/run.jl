@@ -11,7 +11,7 @@ println("# Performance benchmark")
 
 rgi_ids = ["RGI60-11.03638"]
 rgi_paths = get_rgi_paths()
-params = Parameters(
+params = Sleipnir.Parameters(
     simulation = SimulationParameters(
     use_MB = true,
     use_velocities = false,
@@ -21,7 +21,7 @@ params = Parameters(
 )
 glaciers = initialize_glaciers(rgi_ids, params)
 TI1 = TImodel1(params)
-model = Model(nothing, TI1, nothing) # This test only needs a mass balance model
+model = Sleipnir.Model(nothing, TI1, nothing) # This test only needs a mass balance model
 glacier = initialize_glaciers(rgi_ids, params)[1]
 t = 2015.0
 step = 1.0/12.0
