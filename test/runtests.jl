@@ -5,6 +5,7 @@ if !parse(Bool, get(ENV, "CI", "false"))
     using Revise
 end
 using Muninn
+using Sleipnir: Parameters, Model
 using Test
 using JLD2
 using Infiltrator

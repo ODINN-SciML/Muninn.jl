@@ -13,6 +13,7 @@ using Dates
 ### ODINN.jl dependencies ###
 using Reexport
 @reexport using Sleipnir
+using Sleipnir: Parameters, Model
 
 # ##############################################
 # ############    PARAMETERS     ###############
