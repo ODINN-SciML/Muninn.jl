@@ -37,17 +37,17 @@ function apply_MB_test(save_refs::Bool = false)
     JET.@test_opt Model(nothing, TI1, nothing)
 
     t = 2015.0
-    step = 1.0/12.0
-    mb = MB_timestep(model, glacier, step, t)
-    JET.@test_opt target_modules=(Sleipnir, Muninn) MB_timestep(model, glacier, step, t)
+    step_MB = 1.0/12.0
+    mb = MB_timestep(model, glacier, step_MB, t)
+    JET.@test_opt target_modules=(Sleipnir, Muninn) MB_timestep(model, glacier, step_MB, t)
 
     iceflowCache = fakeIceflowCache{Sleipnir.Float}(zero(glacier.H₀))
     cache = fakeCache{typeof(iceflowCache)}(iceflowCache)
 
-    MB_timestep!(cache, model, glacier, step, t)
+    MB_timestep!(cache, model, glacier, step_MB, t)
     @assert mb==cache.iceflow.MB
     JET.@test_opt target_modules=(Sleipnir, Muninn) MB_timestep!(
-        cache, model, glacier, step, t)
+        cache, model, glacier, step_MB, t)
 
     if save_refs
         jldsave(joinpath(Muninn.root_dir, "test/data/MB/MB_model.jld2"); mb)
