@@ -18,7 +18,7 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
 BenchmarkTools = "1"
-Infiltrator = "1.8"
+Infiltrator = "1.8, 1.9"
 JET = "0.9, 0.10"
 JLD2 = "0.4, 0.5, 0.6"
 Reexport = "1"
