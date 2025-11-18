@@ -2,7 +2,11 @@
 export compute_MB, MB_timestep!, MB_timestep
 
 """
-    compute_MB(mb_model::TImodel1, climate_2D_period::Climate2Dstep)
+    compute_MB(
+        mb_model::TImodel1,
+        climate_2D_period::Climate2Dstep,
+        step::AbstractFloat,
+    )
 
 Compute the mass balance (MB) for a given mass balance model and climate period.
 
@@ -10,14 +14,19 @@ Compute the mass balance (MB) for a given mass balance model and climate period.
 
   - `mb_model::TImodel1`: The mass balance model containing parameters such as accumulation factor (`acc_factor`) and degree-day factor (`DDF`).
   - `climate_2D_period::Climate2Dstep`: The climate data for a specific period, including snow accumulation (`snow`) and positive degree days (`PDD`).
+  - `step::AbstractFloat`: The step used to update MB. This scales the MB so that the accumulation and degree-day factors are scaled monthly.
 
 # Returns
 
   - A numerical array representing the computed mass balance, calculated as the difference between the product of the accumulation factor and snow, and the product of the degree-day factor and positive degree days.
 """
-function compute_MB(mb_model::TImodel1, climate_2D_period::Climate2Dstep)
+function compute_MB(
+        mb_model::TImodel1,
+        climate_2D_period::Climate2Dstep,
+        step::AbstractFloat
+)
     return ((mb_model.acc_factor .* climate_2D_period.snow) .-
-            (mb_model.DDF .* climate_2D_period.PDD))
+            (mb_model.DDF .* climate_2D_period.PDD)) ./ (step / (1/12))
 end
 
 """
@@ -50,7 +59,7 @@ function MB_timestep(model::Model, glacier::G, step::F,
     # Convert climate dataset to 2D based on the glacier's DEM
     climate_2D_step = downscale_2D_climate(
         glacier.climate.climate_step, glacier.S, glacier.Coords)
-    MB::Matrix{F} = compute_MB(model.mass_balance, climate_2D_step)
+    MB::Matrix{F} = compute_MB(model.mass_balance, climate_2D_step, step)
     return MB
 end
 
@@ -82,6 +91,7 @@ function MB_timestep!(cache, model::Model, glacier::G, step::F,
 
     # Convert climate dataset to 2D based on the glacier's DEM
     downscale_2D_climate!(glacier)
-    cache.iceflow.MB .= compute_MB(model.mass_balance, glacier.climate.climate_2D_step)
+    cache.iceflow.MB .= compute_MB(
+        model.mass_balance, glacier.climate.climate_2D_step, step)
     return nothing # For type stability
 end

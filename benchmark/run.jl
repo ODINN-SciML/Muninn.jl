@@ -24,9 +24,9 @@ TI1 = TImodel1(params)
 model = Sleipnir.Model(nothing, TI1, nothing) # This test only needs a mass balance model
 glacier = initialize_glaciers(rgi_ids, params)[1]
 t = 2015.0
-step = 1.0/12.0
+step_MB = 1.0/12.0
 
 println("## Benchmark of MB_timestep")
-t = @benchmark MB_timestep($model, $glacier, $step, $t)
+t = @benchmark MB_timestep($model, $glacier, $step_MB, $t)
 display(t)
 println("")
