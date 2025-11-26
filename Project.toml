@@ -17,12 +17,12 @@ Sleipnir = "f5e6c550-199f-11ee-3608-394420200519"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
-BenchmarkTools = "1"
-Infiltrator = "1.8, 1.9"
-JET = "0.9, 0.10"
-JLD2 = "0.4, 0.5, 0.6"
-Reexport = "1"
-Revise = "3"
+BenchmarkTools = "1.6.3"
+Infiltrator = "1.9.4"
+JET = "0.9.18"
+JLD2 = "0.6.2"
+Reexport = "1.2.2"
+Revise = "3.7.5"
 Sleipnir = "0.12.5"
 julia = "1.10"
 
