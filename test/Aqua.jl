@@ -1,0 +1,10 @@
+function test_Aqua()
+    Aqua.test_ambiguities(Muninn)
+    Aqua.test_undefined_exports(Muninn)
+    Aqua.test_project_extras(Muninn)
+    Aqua.test_stale_deps(Muninn; ignore = [:JET, :Test, :BenchmarkTools, :Revise])
+    Aqua.test_deps_compat(Muninn)
+    Aqua.test_piracies(Muninn)
+    Aqua.test_persistent_tasks(Muninn)
+    Aqua.test_undocumented_names(Muninn; broken = true)
+end
