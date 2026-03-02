@@ -8,10 +8,12 @@ function is_included_in_repl()
     return false
 end
 
+Pkg.activate(dirname(Base.current_project()))
+Pkg.instantiate() # Need this to setup the ODINN env for multiprocessing
 if is_included_in_repl()
     # The Project.toml of the test environment to be used when running with include is in a subfolder to avoid that Julia uses this file in test mode
-    Pkg.instantiate()
     Pkg.activate(dirname(Base.current_project())*"/test/test_env/")
+    Pkg.resolve()
 end
 
 if !parse(Bool, get(ENV, "CI", "false"))
