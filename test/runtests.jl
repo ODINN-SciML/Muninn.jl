@@ -38,6 +38,8 @@ ENV["GKSwstype"]="nul"
 @testset "Run all tests" begin
     @testset "Construct TI models by default" TI_creation_default_test()
     @testset "Construct TI models with input values" TI_creation_values_test()
+    @testset "Synthetic TI MB field" TI_synthetic_field_test()
+    @testset "MB compatibility helpers" model_compatibility_utils_test()
     @testset "Apply MB model" apply_MB_test()
     @testset "Aqua" test_Aqua()
 end

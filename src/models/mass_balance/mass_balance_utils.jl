@@ -1,5 +1,40 @@
 
-export compute_MB, MB_timestep!, MB_timestep
+export compute_MB, MB_timestep!, MB_timestep,
+       requires_dynamic_topography, topography_window_m, mb_inputs,
+       required_climate_data_source, validate_climate_data_source,
+       validate_model_simulation_compatibility
+
+requires_dynamic_topography(::MBmodel) = false
+topography_window_m(::MBmodel) = Sleipnir.Float(200.0)
+mb_inputs(::MBmodel) = (;)
+required_climate_data_source(::MBmodel) = nothing
+
+function validate_climate_data_source(model::MBmodel, climate_data_source::Symbol)
+    required_source = required_climate_data_source(model)
+    if !isnothing(required_source) && climate_data_source != required_source
+        throw(ArgumentError(
+            "Mass-balance model $(typeof(model)) requires climate_data_source = :$(required_source), got :$(climate_data_source)."
+        ))
+    end
+    return nothing
+end
+
+function validate_model_simulation_compatibility(
+        model::Sleipnir.Model,
+        parameters::Sleipnir.Parameters)
+    if !isnothing(model.mass_balance)
+        validate_climate_data_source(
+            model.mass_balance,
+            parameters.simulation.climate_data_source
+        )
+    end
+    return nothing
+end
+
+function _requires_topography_from_inputs(model::MBmodel)
+    inputs = values(mb_inputs(model))
+    return any(inp -> inp isa Union{Sleipnir.iTopoSlope, Sleipnir.iTopoAspect}, inputs)
+end
 
 """
     compute_MB(
@@ -58,9 +93,15 @@ function MB_timestep(model::Model, glacier::G, step::F,
 
     # Convert climate dataset to 2D based on the glacier's DEM
     climate_2D_step = downscale_2D_climate(
-        glacier.climate.climate_step, glacier.S, glacier.Coords)
-    MB::Matrix{F} = compute_MB(model.mass_balance, climate_2D_step, step)
-    return MB
+        glacier.climate.climate_step,
+        glacier.S,
+        glacier.Coords;
+        include_topography = requires_dynamic_topography(model.mass_balance) ||
+                             _requires_topography_from_inputs(model.mass_balance),
+        topography_window_m = topography_window_m(model.mass_balance),
+        Δx = glacier.Δx,
+        Δy = glacier.Δy)
+    return compute_MB(model.mass_balance, climate_2D_step, step)
 end
 
 """
@@ -90,7 +131,11 @@ function MB_timestep!(cache, model::Model, glacier::G, step::F,
     get_cumulative_climate!(glacier.climate, t, step)
 
     # Convert climate dataset to 2D based on the glacier's DEM
-    downscale_2D_climate!(glacier)
+    downscale_2D_climate!(
+        glacier;
+        include_topography = requires_dynamic_topography(model.mass_balance) ||
+                             _requires_topography_from_inputs(model.mass_balance),
+        topography_window_m = topography_window_m(model.mass_balance))
     cache.iceflow.MB .= compute_MB(
         model.mass_balance, glacier.climate.climate_2D_step, step)
     return nothing # For type stability
