@@ -6,6 +6,42 @@ mutable struct fakeCache{ICEFLOW}
     iceflow::ICEFLOW
 end
 
+struct DummyMBDefault <: Sleipnir.MBmodel end
+struct DummyMBEra5 <: Sleipnir.MBmodel end
+struct DummyMBPlainInputs <: Sleipnir.MBmodel end
+struct DummyMBTopoInputs <: Sleipnir.MBmodel end
+
+Muninn.required_climate_data_source(::DummyMBEra5) = :ERA5
+Muninn.mb_inputs(::DummyMBPlainInputs) = (;)
+Muninn.mb_inputs(::DummyMBTopoInputs) = (; slope = Sleipnir.iTopoSlope())
+
+function model_compatibility_utils_test()
+    params_era5 = Parameters(
+        simulation = Sleipnir.SimulationParameters(climate_data_source = :ERA5))
+    params_w5e5 = Parameters(
+        simulation = Sleipnir.SimulationParameters(climate_data_source = :W5E5))
+
+    # Default MB model imposes no climate source constraint.
+    @test isnothing(validate_climate_data_source(DummyMBDefault(), :W5E5))
+
+    # MB model with explicit climate source requirement validates both paths.
+    @test isnothing(validate_climate_data_source(DummyMBEra5(), :ERA5))
+    @test_throws ArgumentError validate_climate_data_source(DummyMBEra5(), :W5E5)
+
+    # Compatibility check should be a no-op when there is no MB model.
+    model_without_mb = Model(nothing, nothing, nothing)
+    @test isnothing(validate_model_simulation_compatibility(model_without_mb, params_w5e5))
+
+    # Compatibility check should enforce required climate source when MB exists.
+    model_era5_mb = Model(nothing, DummyMBEra5(), nothing)
+    @test isnothing(validate_model_simulation_compatibility(model_era5_mb, params_era5))
+    @test_throws ArgumentError validate_model_simulation_compatibility(model_era5_mb, params_w5e5)
+
+    # Topography input detection branch coverage.
+    @test !Muninn._requires_topography_from_inputs(DummyMBPlainInputs())
+    @test Muninn._requires_topography_from_inputs(DummyMBTopoInputs())
+end
+
 function apply_MB_test(save_refs::Bool = false)
     rgi_ids = ["RGI60-11.03638"]
 
