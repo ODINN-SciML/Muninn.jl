@@ -6,10 +6,10 @@ mutable struct fakeCache{ICEFLOW}
     iceflow::ICEFLOW
 end
 
-struct DummyMBDefault <: Sleipnir.MBmodel end
-struct DummyMBEra5 <: Sleipnir.MBmodel end
-struct DummyMBPlainInputs <: Sleipnir.MBmodel end
-struct DummyMBTopoInputs <: Sleipnir.MBmodel end
+struct DummyMBDefault <: Muninn.MBmodel end
+struct DummyMBEra5 <: Muninn.MBmodel end
+struct DummyMBPlainInputs <: Muninn.MBmodel end
+struct DummyMBTopoInputs <: Muninn.MBmodel end
 
 Muninn.required_climate_data_source(::DummyMBEra5) = :ERA5
 Muninn.mb_inputs(::DummyMBPlainInputs) = (;)
