@@ -12,6 +12,7 @@ using Dates
 
 ### ODINN.jl dependencies ###
 using Reexport
+using Roots: find_zero, Brent
 @reexport using Sleipnir
 using Sleipnir: Parameters, Model
 

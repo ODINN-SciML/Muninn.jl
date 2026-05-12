@@ -25,12 +25,14 @@ function TI_creation_values_test(save_refs::Bool = false)
     TI1 = TImodel1(
         params;
         DDF = 6.0/1000.0,
-        acc_factor = 1.2/1000.0
+        acc_factor = 1.2/1000.0,
+        prcp_fac = 1.5
     )
     JET.@test_opt TImodel1(
         params;
         DDF = 6.0/1000.0,
-        acc_factor = 1.2/1000.0
+        acc_factor = 1.2/1000.0,
+        prcp_fac = 1.5
     )
     TI2 = TImodel2(
         params;

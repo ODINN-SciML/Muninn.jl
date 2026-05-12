@@ -27,12 +27,18 @@ abstract type TImodel <: MBmodel end
 """
     TImodel1{F <: AbstractFloat}
 
-A structure representing a temperature index model with degree-day factor and accumulation factor.
+A structure representing a temperature index model with degree-day factor, accumulation factor,
+and precipitation correction factor.
 
 # Keyword arguments
 
   - `DDF::F`: Degree-day factor, which is a coefficient used to convert temperature into melt.
-  - `acc_factor::F`: Accumulation factor, which is a coefficient used to adjust the accumulation of mass.
+  - `acc_factor::F`: Accumulation factor (unit conversion, m w.e. mm⁻¹), which scales the raw
+    snowfall amounts from the climate dataset.
+  - `prcp_fac::F`: Dimensionless precipitation correction factor applied as a multiplier to
+    the snowfall field before computing accumulation.  A value of `1.0` (default) leaves
+    precipitation unchanged; values > 1 increase accumulation (useful when the climate input
+    underestimates solid precipitation), values < 1 reduce it.
 
 # Type Parameters
 
@@ -41,10 +47,11 @@ A structure representing a temperature index model with degree-day factor and ac
 struct TImodel1{F <: AbstractFloat} <: TImodel
     DDF::F
     acc_factor::F
+    prcp_fac::F
 end
 
 """
-    TImodel1(params::Sleipnir.Parameters; DDF::F = 7.0/1000.0, acc_factor::F = 1.0/1000.0) where {F <: AbstractFloat}
+    TImodel1(params::Sleipnir.Parameters; DDF::F = 7.0/1000.0, acc_factor::F = 1.0/1000.0, prcp_fac::F = 1.0) where {F <: AbstractFloat}
 
 Create a temperature index model with one degree-day factor (DDF) with the given parameters.
 
@@ -53,6 +60,7 @@ Create a temperature index model with one degree-day factor (DDF) with the given
   - `params::Sleipnir.Parameters`: The simulation parameters.
   - `DDF::F`: Degree-day factor (default is 7.0/1000.0).
   - `acc_factor::F`: Accumulation factor (default is 1.0/1000.0).
+  - `prcp_fac::F`: Dimensionless precipitation correction factor (default is 1.0).
 
 # Returns
 
@@ -60,10 +68,11 @@ Create a temperature index model with one degree-day factor (DDF) with the given
 """
 function TImodel1(params::Sleipnir.Parameters;
         DDF::F = 7.0/1000.0,
-        acc_factor::F = 1.0/1000.0) where {F <: AbstractFloat}
+        acc_factor::F = 1.0/1000.0,
+        prcp_fac::F = 1.0) where {F <: AbstractFloat}
 
     # Build the simulation parameters based on input values
-    TI1_model = TImodel1{Sleipnir.Float}(DDF, acc_factor)
+    TI1_model = TImodel1{Sleipnir.Float}(DDF, acc_factor, prcp_fac)
 
     return TI1_model
 end
@@ -116,7 +125,7 @@ function TImodel2(params::Sleipnir.Parameters;
     return TI2_model
 end
 
-Base.:(==)(a::TImodel1, b::TImodel1) = a.DDF == b.DDF && a.acc_factor == b.acc_factor
+Base.:(==)(a::TImodel1, b::TImodel1) = a.DDF == b.DDF && a.acc_factor == b.acc_factor && a.prcp_fac == b.prcp_fac
 
 function Base.:(==)(a::TImodel2, b::TImodel2)
     a.DDF_snow == b.DDF_snow && a.DDF_ice == b.DDF_ice &&
@@ -130,7 +139,9 @@ function Base.show(io::IO, model::TImodel1)
     print(io, "   DDF = ")
     println(io, model.DDF)
     print(io, "   acc_factor = ")
-    print(io, model.acc_factor)
+    println(io, model.acc_factor)
+    print(io, "   prcp_fac = ")
+    print(io, model.prcp_fac)
 end
 Base.show(io::IO, type::MIME"text/plain", model::TImodel2) = Base.show(io, model)
 function Base.show(io::IO, model::TImodel2)
@@ -144,3 +155,4 @@ function Base.show(io::IO, model::TImodel2)
 end
 
 include("mass_balance_utils.jl")
+include("calibration.jl")

@@ -60,7 +60,7 @@ function compute_MB(
         climate_2D_period::Climate2Dstep,
         step::AbstractFloat
 )
-    return ((mb_model.acc_factor .* climate_2D_period.snow) .-
+    return ((mb_model.acc_factor .* mb_model.prcp_fac .* climate_2D_period.snow) .-
             (mb_model.DDF .* climate_2D_period.PDD)) ./ (step / (1/12))
 end
 
