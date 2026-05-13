@@ -156,11 +156,13 @@ function calibrate_ti_model(
         density_ratio::Sleipnir.Float = Sleipnir.Float(1.0),
         calibration_period::Union{Nothing, Tuple{Sleipnir.Float, Sleipnir.Float}} = nothing,
         step::Sleipnir.Float = Sleipnir.Float(1.0 / 12.0))
-    if isnothing(glacier.dhdtData)
+    mb_observation = glacier.geodetic_MB
+
+    if !isfinite(mb_observation)
         throw(ArgumentError(
-            "glacier.dhdtData is nothing. Geodetic mass-balance observations " *
+        "glacier.geodetic_MB is not available. Geodetic mass-balance observations " *
             "are required for TI model calibration. " *
-            "Please populate glacier.dhdtData (e.g. from Hugonnet et al. 2021) " *
+        "Please populate glacier.geodetic_MB (e.g. from Hugonnet et al. 2021) " *
             "before calling calibrate_ti_model."))
     end
 
@@ -173,7 +175,7 @@ function calibrate_ti_model(
     end
 
     # Target glacier-wide mean annual MB in m w.e. yr⁻¹
-    mb_target = Sleipnir.Float(glacier.dhdtData.dhdt) * density_ratio
+    mb_target = Sleipnir.Float(mb_observation) * density_ratio
 
     # ── Step 1: calibrate DDF with prcp_fac = 1.0 ──────────────────────────
     prcp_fac_fixed = Sleipnir.Float(1.0)

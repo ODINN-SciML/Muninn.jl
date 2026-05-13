@@ -31,7 +31,7 @@ function calibrate_ti_model_test()
     dhdt_data = Sleipnir.DhdtData(
         (Sleipnir.Float(calibration_tspan[1]), Sleipnir.Float(calibration_tspan[2])),
         geodetic_mb)
-    glacier = Sleipnir.Glacier2D(glacier; dhdtData = dhdt_data)
+    glacier = Sleipnir.Glacier2D(glacier; dhdtData = dhdt_data, geodetic_MB = geodetic_mb)
 
     # --- compute_mean_annual_MB: verify it returns a finite scalar ---------------
     TI_default = TImodel1(params)

@@ -7,16 +7,12 @@ function TI_creation_default_test(save_refs::Bool = false)
     TI2 = TImodel2(params)
     JET.@test_opt TImodel2(params)
 
-    if save_refs
-        jldsave(joinpath(Muninn.root_dir, "test/data/TI/TI1_model_default.jld2"); TI1)
-        jldsave(joinpath(Muninn.root_dir, "test/data/TI/TI2_model_default.jld2"); TI2)
-    end
-
-    TI1_ref = load(joinpath(Muninn.root_dir, "test/data/TI/TI1_model_default.jld2"))["TI1"]
-    TI2_ref = load(joinpath(Muninn.root_dir, "test/data/TI/TI2_model_default.jld2"))["TI2"]
-
-    @test TI1 == TI1_ref
-    @test TI2 == TI2_ref
+    @test TI1.DDF == Sleipnir.Float(7.0/1000.0)
+    @test TI1.acc_factor == Sleipnir.Float(1.0/1000.0)
+    @test TI1.prcp_fac == Sleipnir.Float(1.0)
+    @test TI2.DDF_snow == Sleipnir.Float(3.0/1000.0)
+    @test TI2.DDF_ice == Sleipnir.Float(6.0/1000.0)
+    @test TI2.acc_factor == Sleipnir.Float(1.0/1000.0)
 end
 
 function TI_creation_values_test(save_refs::Bool = false)
@@ -47,16 +43,12 @@ function TI_creation_values_test(save_refs::Bool = false)
         acc_factor = 1.2/1000.0
     )
 
-    if save_refs
-        jldsave(joinpath(Muninn.root_dir, "test/data/TI/TI1_model_specified.jld2"); TI1)
-        jldsave(joinpath(Muninn.root_dir, "test/data/TI/TI2_model_specified.jld2"); TI2)
-    end
-
-    TI1_ref = load(joinpath(Muninn.root_dir, "test/data/TI/TI1_model_specified.jld2"))["TI1"]
-    TI2_ref = load(joinpath(Muninn.root_dir, "test/data/TI/TI2_model_specified.jld2"))["TI2"]
-
-    @test TI1 == TI1_ref
-    @test TI2 == TI2_ref
+    @test TI1.DDF == Sleipnir.Float(6.0/1000.0)
+    @test TI1.acc_factor == Sleipnir.Float(1.2/1000.0)
+    @test TI1.prcp_fac == Sleipnir.Float(1.5)
+    @test TI2.DDF_snow == Sleipnir.Float(3.0/1000.0)
+    @test TI2.DDF_ice == Sleipnir.Float(6.0/1000.0)
+    @test TI2.acc_factor == Sleipnir.Float(1.2/1000.0)
 end
 
 function TI_synthetic_field_test()
