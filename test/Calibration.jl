@@ -5,13 +5,13 @@ function _calibration_test_params(rgi_ids, calibration_tspan)
 
     return Sleipnir.Parameters(
         simulation = Sleipnir.SimulationParameters(
-            use_MB = true,
-            use_velocities = false,
-            tspan = calibration_tspan,
-            multiprocessing = false,
-            workers = 1,
-            test_mode = true,
-            rgi_paths = rgi_paths),
+        use_MB = true,
+        use_velocities = false,
+        tspan = calibration_tspan,
+        multiprocessing = false,
+        workers = 1,
+        test_mode = true,
+        rgi_paths = rgi_paths),
     )
 end
 
@@ -41,8 +41,10 @@ function calibrate_ti_model_test()
         Sleipnir.Float(calibration_tspan[2]))
     @test isfinite(mb_default)
 
-    # --- calibrate_ti_model: DDF should drive modelled MB to target --------------
-    TI_cal = calibrate_ti_model(glacier, params)
+    # --- calibrate_ti_model!: DDF should drive modelled MB to target --------------
+    TI_vec_single = [TImodel1(params)]
+    calibrate_ti_model!(TI_vec_single, [glacier], params)
+    TI_cal = TI_vec_single[1]
     @test TI_cal isa TImodel1
 
     # The calibrated DDF must lie within the default search bounds
@@ -60,16 +62,19 @@ function calibrate_ti_model_test()
     @test isfinite(mb_cal)
     @test abs(mb_cal - geodetic_mb) < 1e-4  # within 0.1 mm w.e. yr⁻¹
 
-    # --- Vector method: calibrate over a vector of glaciers ----------------------
+    # --- Vector method: calibrate in-place over a vector of glaciers ----------------------
     glaciers = [glacier]
-    TI_vec = calibrate_ti_model(glaciers, params)
+    TI_vec = [TImodel1(params)]
+    calibrate_ti_model!(TI_vec, glaciers, params)
     @test length(TI_vec) == 1
     @test TI_vec[1].DDF ≈ TI_cal.DDF
 
     # --- calibration_period override --------------------------------------------
-    TI_override = calibrate_ti_model(
-        glacier, params;
+    TI_override_vec = [TImodel1(params)]
+    calibrate_ti_model!(
+        TI_override_vec, [glacier], params;
         calibration_period = (Sleipnir.Float(2005.0), Sleipnir.Float(2015.0)))
+    TI_override = TI_override_vec[1]
     @test TI_override isa TImodel1
     @test isfinite(TI_override.DDF)
 end
@@ -88,7 +93,9 @@ function calibrate_ti_model_default_dhdt_test()
     @test isfinite(glacier.dhdtData.dhdt)
     @test glacier.dhdtData.dhdt ≈ Sleipnir.Float(-1.0494)
 
-    TI_cal = calibrate_ti_model(glacier, params)
+    TI_vec = [TImodel1(params)]
+    calibrate_ti_model!(TI_vec, [glacier], params)
+    TI_cal = TI_vec[1]
     @test TI_cal isa TImodel1
     @test TI_cal.DDF >= params.physical.DDF_min
     @test TI_cal.DDF <= params.physical.DDF_max
