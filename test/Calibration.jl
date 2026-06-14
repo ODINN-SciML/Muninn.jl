@@ -120,7 +120,9 @@ function calibrate_ti_model_temp_bias_test()
     # climate) increases melt and converts snow to rain, making MB more negative.
     # Use prcp_fac=1.0 (fixed) for reproducibility; with variable prcp_fac from
     # winter precip, the calibration dynamics may differ.
-    extreme_target = Sleipnir.Float(-5.0)  # -5 m w.e. yr⁻¹ — unreachable by DDF/prcp_fac alone
+    # -20 m w.e. yr⁻¹ is far beyond what DDF_max (0.02 m/°C/d) + prcp_fac_min (0.1)
+    # can achieve without additional warming from temp_bias.
+    extreme_target = Sleipnir.Float(-20.0)
     dhdt_data = Sleipnir.DhdtData(
         (Sleipnir.Float(calibration_tspan[1]), Sleipnir.Float(calibration_tspan[2])),
         extreme_target)
