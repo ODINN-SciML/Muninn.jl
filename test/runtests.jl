@@ -21,6 +21,7 @@ if !parse(Bool, get(ENV, "CI", "false"))
 end
 using Muninn
 using Sleipnir: Parameters, Model
+using Distributed
 using Test
 using JLD2
 using Infiltrator
@@ -43,6 +44,7 @@ ENV["GKSwstype"]="nul"
     @testset "MB compatibility helpers" model_compatibility_utils_test()
     @testset "Apply MB model" apply_MB_test()
     @testset "Calibrate TI model" calibrate_ti_model_test()
+    @testset "Calibrate TI model — temp_bias step" calibrate_ti_model_temp_bias_test()
     @testset "Default geodetic MB loading" calibrate_ti_model_default_dhdt_test()
     @testset "Aqua" test_Aqua()
 end

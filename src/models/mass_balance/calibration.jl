@@ -1,9 +1,51 @@
 
-export calibrate_ti_model!, compute_mean_annual_MB
+export calibrate_MB_model!, calibrate_ti_model, compute_mean_annual_MB,
+       compute_cumulative_MB
 
 ###############################################
 ##### GEODETIC MASS BALANCE CALIBRATION  ######
 ###############################################
+
+"""
+    compute_cumulative_MB(
+        mb_model::TImodel1,
+        glacier::AbstractGlacier,
+        t_start::F,
+        t_end::F;
+        step::F = F(1.0 / 12.0),
+    ) where {F <: AbstractFloat} -> Matrix{Sleipnir.Float}
+
+Accumulate the gridded mass balance (m w.e.) over `[t_start, t_end]` using a
+static glacier geometry.  Returns the full 2D cumulative MB field, suitable for
+spatial visualisation via [`plot_cumulative_mb`](@ref).
+
+See [`compute_mean_annual_MB`](@ref) for the glacier-wide scalar summary.
+"""
+function compute_cumulative_MB(
+        mb_model::TImodel1,
+        glacier::AbstractGlacier,
+        t_start::F,
+        t_end::F;
+        step::F = F(1.0 / 12.0)) where {F <: AbstractFloat}
+    total_mb = zeros(Sleipnir.Float, size(glacier.S))
+    n_steps = 0
+    t = t_start + step
+    while t <= t_end + step / 2
+        get_cumulative_climate!(glacier.climate, Sleipnir.Float(t), Sleipnir.Float(step))
+        climate_2D = downscale_2D_climate(
+            glacier.climate.climate_step,
+            glacier.climate.climate_raw_step,
+            glacier.S,
+            glacier.Coords;
+            include_topography = false,
+            temp_bias = mb_model.temp_bias)
+        total_mb .+= compute_MB(mb_model, climate_2D, Sleipnir.Float(step))
+        n_steps += 1
+        t += step
+    end
+    n_steps == 0 && return zeros(Sleipnir.Float, size(glacier.S))
+    return total_mb
+end
 
 """
     compute_mean_annual_MB(
@@ -14,31 +56,9 @@ export calibrate_ti_model!, compute_mean_annual_MB
         step::F = F(1.0 / 12.0),
     ) where {F <: AbstractFloat} -> Sleipnir.Float
 
-Compute the glacier-wide mean annual mass balance (m w.e. yr⁻¹) over the period
-`[t_start, t_end]` using a **static** glacier geometry (no ice-flow dynamics).
-
-The surface elevation field `glacier.S` is kept constant throughout the integration.
-Climate data is sampled at monthly resolution by default, and the resulting 2D MB
-fields are averaged over the ice-covered area (`glacier.mask .== false`) and then
-normalised to an annual rate.
-
-As a side-effect this function mutates `glacier.climate` (the cumulative-climate
-buffer inside the glacier), which is consistent with the rest of the ODINN stack.
-
-# Arguments
-
-  - `mb_model::TImodel1`: The temperature-index model to evaluate.
-  - `glacier::AbstractGlacier`: A glacier object with loaded climate data.
-  - `t_start::F`: Start of the integration period (fractional year).
-  - `t_end::F`: End of the integration period (fractional year).
-
-# Keyword arguments
-
-  - `step::F`: Integration timestep in fractional years. Default is `1/12` (monthly).
-
-# Returns
-
-  - Glacier-wide mean annual mass balance in m w.e. yr⁻¹.
+Glacier-wide mean annual mass balance (m w.e. yr⁻¹) over `[t_start, t_end]`
+with static geometry.  Spatially averages the output of [`compute_cumulative_MB`](@ref)
+over the ice-covered area and normalises to an annual rate.
 """
 function compute_mean_annual_MB(
         mb_model::TImodel1,
@@ -46,35 +66,13 @@ function compute_mean_annual_MB(
         t_start::F,
         t_end::F;
         step::F = F(1.0 / 12.0)) where {F <: AbstractFloat}
-    # Accumulate MB over the entire period with static geometry
-    total_mb = zeros(Sleipnir.Float, size(glacier.S))
-
-    n_steps = 0
-    t = t_start + step
-    # Half-step tolerance to guard against floating-point drift at the boundary
-    while t <= t_end + step / 2
-        get_cumulative_climate!(glacier.climate, Sleipnir.Float(t), Sleipnir.Float(step))
-        climate_2D = downscale_2D_climate(
-            glacier.climate.climate_step,
-            glacier.S,
-            glacier.Coords;
-            include_topography = false)
-        mb_step = compute_MB(mb_model, climate_2D, Sleipnir.Float(step))
-        total_mb .+= mb_step
-        n_steps += 1
-        t += step
-    end
-
-    n_steps == 0 && return Sleipnir.Float(0.0)
-
-    # Mask convention: mask == true → outside glacier (no ice)
+    total_mb = compute_cumulative_MB(mb_model, glacier, t_start, t_end; step)
+    # n_steps == 0 case: compute_cumulative_MB returns a zero matrix; detect it
+    # via the glacier mask rather than re-tracking n_steps.
     glacier_cells = .!glacier.mask
     !any(glacier_cells) && return Sleipnir.Float(0.0)
-
-    # Each monthly compute_MB call returns m w.e. month⁻¹, so the sum over
-    # 12 months equals m w.e. yr⁻¹ for one year.  Dividing the total by the
-    # number of years gives the mean annual MB.
     n_years = Sleipnir.Float(t_end - t_start)
+    iszero(total_mb) && return Sleipnir.Float(0.0)
     cell_values = total_mb[glacier_cells]
     return Sleipnir.Float(sum(cell_values) / length(cell_values)) / n_years
 end
@@ -83,32 +81,41 @@ end
     calibrate_ti_model(
         glacier::AbstractGlacier,
         params::Parameters;
-        acc_factor::Sleipnir.Float = Sleipnir.Float(1.0 / 1000.0),
-      DDF_bounds::Tuple{Sleipnir.Float, Sleipnir.Float} = (
-        Sleipnir.Float(params.physical.DDF_min),
-        Sleipnir.Float(params.physical.DDF_max)),
-      prcp_fac_bounds::Tuple{Sleipnir.Float, Sleipnir.Float} = (
-        Sleipnir.Float(params.physical.prcp_fac_min),
-        Sleipnir.Float(params.physical.prcp_fac_max)),
+        DDF_bounds::Tuple{Sleipnir.Float, Sleipnir.Float} = (
+            Sleipnir.Float(params.physical.DDF_min),
+            Sleipnir.Float(params.physical.DDF_max)),
+        prcp_fac_bounds::Tuple{Sleipnir.Float, Sleipnir.Float} = (
+            Sleipnir.Float(params.physical.prcp_fac_min),
+            Sleipnir.Float(params.physical.prcp_fac_max)),
+        temp_bias_bounds::Tuple{Sleipnir.Float, Sleipnir.Float} = (
+            Sleipnir.Float(params.physical.temp_bias_min),
+            Sleipnir.Float(params.physical.temp_bias_max)),
         density_ratio::Sleipnir.Float = Sleipnir.Float(1.0),
         calibration_period::Union{Nothing, Tuple{Sleipnir.Float, Sleipnir.Float}} = nothing,
+        prcp_fac::Union{Symbol, Real} = :from_winter_prcp,
         step::Sleipnir.Float = Sleipnir.Float(1.0 / 12.0),
     ) -> TImodel1
 
 Calibrate `TImodel1` for a single glacier against the geodetic mass balance stored
 in `glacier.dhdtData` (e.g. the 2000-2020 observations from Hugonnet et al. 2021).
 
-The calibration follows a **2-step cascade** analogous to the OGGM v1.6 approach,
+The calibration follows a **3-step cascade** analogous to the OGGM v1.6 approach,
 using Brent's method for root-finding at each step:
 
- 1. **DDF step**: With `prcp_fac = 1.0` fixed, find the degree-day factor that
-    matches the geodetic MB target.  If the target can be bracketed within
-    `DDF_bounds`, this step alone produces the calibrated model.
+ 1. **DDF step**: With `prcp_fac` fixed (glacier-specific from winter precipitation
+    by default, see the `prcp_fac` keyword) and `temp_bias = 0.0`, find the
+    degree-day factor that matches the geodetic MB target.  If the target can be
+    bracketed within `DDF_bounds`, this step alone produces the calibrated model.
 
- 2. **`prcp_fac` step** (fallback): If the DDF search cannot bracket the target
-    (e.g. because the climate input severely under/overestimates precipitation),
-    the DDF is fixed at its boundary value and `prcp_fac` is varied within
-    `prcp_fac_bounds` instead.  A warning is emitted when this fallback is used.
+ 2. **`prcp_fac` step** (fallback): If the DDF search cannot bracket the target,
+    DDF is fixed at its boundary value and `prcp_fac` is varied within
+    `prcp_fac_bounds`.  A warning is emitted when this fallback is used.
+
+ 3. **`temp_bias` step** (fallback): If both previous steps fail, DDF and
+    `prcp_fac` are fixed at their best boundary values and a uniform temperature
+    bias (°C) is varied within `temp_bias_bounds`.  This handles glaciers where
+    the climate forcing is systematically biased for the glacier's hypsometry
+    (e.g. high-elevation accumulation overestimation in coarse reanalysis data).
 
 A static glacier geometry is assumed throughout (no ice-flow dynamics).
 
@@ -116,26 +123,34 @@ A static glacier geometry is assumed throughout (no ice-flow dynamics).
 
   - `glacier::AbstractGlacier`: Glacier whose `dhdtData` field contains the
     observed geodetic mass balance (see [`DhdtData`](@ref)).
-  - `params::Parameters`: Simulation parameters (used only for type consistency).
+  - `params::Parameters`: Simulation parameters (provides physical bounds).
 
 # Keyword arguments
 
-  - `acc_factor`: Unit-conversion accumulation factor (m w.e. mm⁻¹), kept fixed.
-    Default: `1.0 × 10⁻³`.
   - `DDF_bounds`: Search interval `(DDF_min, DDF_max)` in m w.e. °C⁻¹ d⁻¹.
-    Default: `(0.5 × 10⁻³, 20.0 × 10⁻³)`.
+    Default: from `params.physical`.
   - `prcp_fac_bounds`: Search interval for the precipitation correction factor
-    (dimensionless). Default: `(0.1, 10.0)`.
+    (dimensionless). Default: from `params.physical`.
+  - `temp_bias_bounds`: Search interval for the temperature bias (°C).
+    Default: from `params.physical`.
   - `density_ratio`: Conversion factor applied to `glacier.dhdtData.dhdt`.  Use
     `params.physical.ρ / params.physical.ρ_w ≈ 0.9` when the data are in m ice yr⁻¹, or `1.0`
     (default) for m w.e. yr⁻¹ (Hugonnet et al. 2021).
   - `calibration_period`: Time window `(t_start, t_end)` in fractional years.
     Defaults to `glacier.dhdtData.t`.
+  - `prcp_fac`: Precipitation factor used in the DDF step. `:from_winter_prcp`
+    (default) derives a glacier-specific factor from winter precipitation via
+    [`Sleipnir.get_winter_prcp_factor`](@ref); a `Real` value fixes it (e.g. `2.5`
+    for OGGM's global W5E5 default). Only used in step 1; the fallback steps still
+    search `prcp_fac_bounds`.
   - `step`: Integration timestep in fractional years. Default: `1/12` (monthly).
 
 # Returns
 
-  - A `TImodel1{Sleipnir.Float}` with calibrated `DDF` and `prcp_fac`.
+  - A `TImodel1{Sleipnir.Float}` with calibrated `DDF`, `prcp_fac`, and `temp_bias`.
+
+This is the per-glacier building block used by [`calibrate_MB_model!`](@ref) to
+build a per-glacier vector of calibrated models.
 
 # Reference
 
@@ -143,18 +158,21 @@ Hugonnet, R. et al. (2021). Accelerated global glacier mass loss in the early
 twenty-first century. *Nature*, 592, 726–731.
 https://doi.org/10.1038/s41586-021-03436-z
 """
-function _calibrate_ti_model(
+function calibrate_ti_model(
         glacier::AbstractGlacier,
         params::Parameters;
-        acc_factor::Sleipnir.Float = Sleipnir.Float(1.0 / 1000.0),
         DDF_bounds::Tuple{Sleipnir.Float, Sleipnir.Float} = (
             Sleipnir.Float(params.physical.DDF_min),
             Sleipnir.Float(params.physical.DDF_max)),
         prcp_fac_bounds::Tuple{Sleipnir.Float, Sleipnir.Float} = (
             Sleipnir.Float(params.physical.prcp_fac_min),
             Sleipnir.Float(params.physical.prcp_fac_max)),
+        temp_bias_bounds::Tuple{Sleipnir.Float, Sleipnir.Float} = (
+            Sleipnir.Float(params.physical.temp_bias_min),
+            Sleipnir.Float(params.physical.temp_bias_max)),
         density_ratio::Sleipnir.Float = Sleipnir.Float(1.0),
         calibration_period::Union{Nothing, Tuple{Sleipnir.Float, Sleipnir.Float}} = nothing,
+        prcp_fac::Union{Symbol, Real} = :from_winter_prcp,
         step::Sleipnir.Float = Sleipnir.Float(1.0 / 12.0))
     mb_observation = glacier.geodetic_MB
 
@@ -163,7 +181,7 @@ function _calibrate_ti_model(
             "glacier.geodetic_MB is not available. Geodetic mass-balance observations " *
             "are required for TI model calibration. " *
             "Please populate glacier.geodetic_MB (e.g. from Hugonnet et al. 2021) " *
-            "before calling calibrate_ti_model!."))
+            "before calling calibrate_ti_model."))
     end
 
     # Determine calibration period
@@ -178,11 +196,19 @@ function _calibrate_ti_model(
     # Target glacier-wide mean annual MB in m w.e. yr⁻¹
     mb_target = Sleipnir.Float(mb_observation) * density_ratio
 
-    # ── Step 1: calibrate DDF with prcp_fac = 1.0 ──────────────────────────
-    prcp_fac_fixed = Sleipnir.Float(1.0)
+    tb_zero = Sleipnir.Float(0.0)
+
+    # ── Step 1: calibrate DDF with prcp_fac fixed, temp_bias = 0.0 ────────
+    # prcp_fac is either glacier-specific (from winter precipitation, OGGM-style)
+    # or a user-provided constant (e.g. 2.5, OGGM's global W5E5 default).
+    prcp_fac_fixed = if prcp_fac === :from_winter_prcp
+        Sleipnir.get_winter_prcp_factor(glacier, params; prcp_fac_bounds)
+    else
+        Sleipnir.Float(prcp_fac)
+    end
 
     function residual_ddf(DDF::Sleipnir.Float)
-        model_trial = TImodel1{Sleipnir.Float}(DDF, acc_factor, prcp_fac_fixed)
+        model_trial = TImodel1{Sleipnir.Float}(DDF, prcp_fac_fixed, tb_zero)
         return compute_mean_annual_MB(model_trial, glacier, t_start, t_end; step) -
                mb_target
     end
@@ -192,23 +218,20 @@ function _calibrate_ti_model(
     r_ddf_max = residual_ddf(DDF_max)
 
     if r_ddf_min * r_ddf_max <= 0
-        # Root is bracketed → Brent solve
         DDF_cal = _brent(residual_ddf, DDF_min, DDF_max, r_ddf_min, r_ddf_max)
-        return TImodel1{Sleipnir.Float}(DDF_cal, acc_factor, prcp_fac_fixed)
+        return TImodel1{Sleipnir.Float}(DDF_cal, prcp_fac_fixed, tb_zero)
     end
 
-    # ── Step 2: DDF at boundary (whichever minimizes residual), calibrate prcp_fac ──
-    # OGGM v1.6 approach: select boundary DDF that is closer to target, then
-    # solve for prcp_fac. This keeps MB realistic when climate input is strongly biased.
+    # ── Step 2: DDF at boundary, calibrate prcp_fac ────────────────────────
     DDF_fixed = abs(r_ddf_min) <= abs(r_ddf_max) ? DDF_min : DDF_max
 
-    @warn "calibrate_ti_model!: geodetic MB target ($(round(mb_target; digits=4)) m w.e. yr⁻¹) " *
+    @warn "calibrate_ti_model: geodetic MB target ($(round(mb_target; digits=4)) m w.e. yr⁻¹) " *
           "for glacier $(glacier.rgi_id) could not be bracketed by DDF alone within " *
           "DDF_bounds = $(DDF_bounds). " *
           "Falling back to prcp_fac calibration with DDF fixed at $(DDF_fixed)."
 
     function residual_prcp(prcp_fac::Sleipnir.Float)
-        model_trial = TImodel1{Sleipnir.Float}(DDF_fixed, acc_factor, prcp_fac)
+        model_trial = TImodel1{Sleipnir.Float}(DDF_fixed, prcp_fac, tb_zero)
         return compute_mean_annual_MB(model_trial, glacier, t_start, t_end; step) -
                mb_target
     end
@@ -219,53 +242,98 @@ function _calibrate_ti_model(
 
     if r_pf_min * r_pf_max <= 0
         prcp_fac_cal = _brent(residual_prcp, pf_min, pf_max, r_pf_min, r_pf_max)
-        return TImodel1{Sleipnir.Float}(DDF_fixed, acc_factor, prcp_fac_cal)
+        return TImodel1{Sleipnir.Float}(DDF_fixed, prcp_fac_cal, tb_zero)
     end
 
-    # Both steps exhausted — return the boundary pair with the smallest residual
-    @warn "calibrate_ti_model!: prcp_fac calibration also failed to bracket the target " *
-          "for glacier $(glacier.rgi_id). Returning the best boundary pair."
-    prcp_fac_cal = abs(r_pf_min) <= abs(r_pf_max) ? pf_min : pf_max
-    return TImodel1{Sleipnir.Float}(DDF_fixed, acc_factor, prcp_fac_cal)
+    # ── Step 3: DDF + prcp_fac at boundary, calibrate temp_bias ───────────
+    prcp_fac_fixed2 = abs(r_pf_min) <= abs(r_pf_max) ? pf_min : pf_max
+
+    @warn "calibrate_ti_model: prcp_fac calibration also failed to bracket the target " *
+          "for glacier $(glacier.rgi_id). " *
+          "Falling back to temp_bias calibration with DDF=$(DDF_fixed), prcp_fac=$(prcp_fac_fixed2)."
+
+    function residual_tb(temp_bias::Sleipnir.Float)
+        model_trial = TImodel1{Sleipnir.Float}(
+            DDF_fixed, prcp_fac_fixed2, temp_bias)
+        return compute_mean_annual_MB(model_trial, glacier, t_start, t_end; step) -
+               mb_target
+    end
+
+    tb_min, tb_max = temp_bias_bounds
+    r_tb_min = residual_tb(tb_min)
+    r_tb_max = residual_tb(tb_max)
+
+    if r_tb_min * r_tb_max <= 0
+        tb_cal = _brent(residual_tb, tb_min, tb_max, r_tb_min, r_tb_max)
+        return TImodel1{Sleipnir.Float}(DDF_fixed, prcp_fac_fixed2, tb_cal)
+    end
+
+    # All steps exhausted — return the boundary triple with the smallest residual
+    @warn "calibrate_ti_model: temp_bias calibration also failed to bracket the target " *
+          "for glacier $(glacier.rgi_id). Returning the best boundary triple."
+    tb_cal = abs(r_tb_min) <= abs(r_tb_max) ? tb_min : tb_max
+    return TImodel1{Sleipnir.Float}(DDF_fixed, prcp_fac_fixed2, tb_cal)
 end
 
 """
-    calibrate_ti_model!(
-        mb_models::Vector{<:TImodel},
+    calibrate_MB_model!(
+        model::Sleipnir.Model,
         glaciers::Vector{<:AbstractGlacier},
-        params::Parameters;
-        kwargs...,
-    )
+        params::Parameters,
+    ) -> Sleipnir.Model
 
-Calibrate each element of `mb_models` **in-place**, independently for each
-glacier in `glaciers`.  `mb_models` and `glaciers` must have the same length.
+High-level entry point that calibrates the mass balance model of `model`
+per glacier against geodetic observations, mutating and returning `model`.
 
-Each element is replaced with a `TImodel1` calibrated against the geodetic mass
-balance stored in the corresponding `glacier`.  All keyword arguments are the
-same as for the internal single-glacier `_calibrate_ti_model`.
+The behaviour dispatches on the mass balance model type:
 
-Glaciers whose `dhdtData` is `nothing` are skipped and a warning is emitted;
-the corresponding entry in `mb_models` is left unchanged.
+  - `TImodel1`: `model.mass_balance` is replaced by a per-glacier vector of
+    `TImodel1`s, each fitted against its glacier's geodetic mass balance with
+    [`calibrate_ti_model`](@ref).  Glaciers without `dhdtData` keep the original
+    (uncalibrated) model and a warning is emitted.  If no glacier carries geodetic
+    data, the model is left unchanged.
+  - any other [`MBmodel`](@ref): no-op — no calibration routine is defined, so the
+    model is returned untouched.  Add a `_calibrate_MB_model!(model, ::YourType, …)`
+    method to support a new model type.
+
+An already-vectorized (per-glacier) mass balance model is left unchanged.  Any
+keyword arguments are forwarded to the type-specific calibrator (e.g.
+[`calibrate_ti_model`](@ref) for `TImodel1`).  This is the function the
+`Prediction` and `Inversion` constructors call when
+`params.simulation.calibrate_MB` is `true`.
 """
-function calibrate_ti_model!(
-        mb_models::Vector{<:TImodel},
+function calibrate_MB_model!(
+        model::Sleipnir.Model,
         glaciers::Vector{<:AbstractGlacier},
         params::Parameters;
         kwargs...)
-    calibrated_models = pmap(collect(enumerate(glaciers))) do (i, glacier)
-        if isnothing(glacier.dhdtData)
-            @warn "calibrate_ti_model!: skipping glacier $(glacier.rgi_id) " *
-                  "because dhdtData is nothing."
-            return (i, nothing)
-        end
-        return (i, _calibrate_ti_model(glacier, params; kwargs...))
-    end
+    # Nothing to do for empty or already per-glacier mass balance models.
+    isnothing(model.mass_balance) && return model
+    model.mass_balance isa AbstractVector && return model
+    return _calibrate_MB_model!(model, model.mass_balance, glaciers, params; kwargs...)
+end
 
-    for (i, calibrated_model) in calibrated_models
-        isnothing(calibrated_model) && continue
-        mb_models[i] = calibrated_model
+# Default: mass balance models without a calibration routine are left untouched.
+function _calibrate_MB_model!(
+        model, ::MBmodel, ::Vector{<:AbstractGlacier}, ::Parameters; kwargs...)
+    return model
+end
+
+# TImodel1: fit one model per glacier against its geodetic mass balance.
+function _calibrate_MB_model!(
+        model, template::TImodel1,
+        glaciers::Vector{<:AbstractGlacier}, params::Parameters; kwargs...)
+    # Without any geodetic observations there is nothing to calibrate against.
+    any(g -> !isnothing(g.dhdtData), glaciers) || return model
+    model.mass_balance = pmap(glaciers) do glacier
+        if isnothing(glacier.dhdtData)
+            @warn "calibrate_MB_model!: skipping glacier $(glacier.rgi_id) " *
+                  "because dhdtData is nothing."
+            return template  # immutable model → safe to share, no copy needed
+        end
+        return calibrate_ti_model(glacier, params; kwargs...)
     end
-    return mb_models
+    return model
 end
 
 # ---- private root-finder -----------------------------------------------
