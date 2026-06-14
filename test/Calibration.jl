@@ -46,19 +46,30 @@ function calibrate_ti_model_test()
         Sleipnir.Float(calibration_tspan[2]))
     @test isfinite(mb_default)
 
-    # --- calibrate_ti_model: DDF should drive modelled MB to target --------------
-    TI_cal = calibrate_ti_model(glacier, params)
+    # --- calibrate_ti_model: DDF should drive modelled MB to target (fixed prcp_fac) ----
+    # Use fixed prcp_fac=1.0 for this synthetic test (default now derives from winter precip)
+    TI_cal = calibrate_ti_model(glacier, params; prcp_fac = 1.0)
     @test TI_cal isa TImodel1
 
     # The calibrated DDF must lie within the default search bounds
     @test TI_cal.DDF >= params.physical.DDF_min
     @test TI_cal.DDF <= params.physical.DDF_max
 
-    # prcp_fac should be 1.0 (DDF-only calibration in this test)
+    # prcp_fac should be 1.0 (as explicitly passed)
     @test TI_cal.prcp_fac ≈ Sleipnir.Float(1.0)
 
     # temp_bias should be 0.0 (DDF-only calibration in this test)
     @test TI_cal.temp_bias ≈ Sleipnir.Float(0.0)
+
+    # --- calibrate_ti_model: variable prcp_fac from winter precipitation (default) ----
+    TI_var = calibrate_ti_model(glacier, params)
+    @test TI_var isa TImodel1
+    # prcp_fac should be glacier-specific (derived from winter precip, not 1.0)
+    @test TI_var.prcp_fac > Sleipnir.Float(0.1)  # within bounds
+    @test TI_var.prcp_fac < Sleipnir.Float(10.0)
+    # For synthetic test target, variable prcp_fac may or may not need temp_bias
+    @test TI_var.temp_bias >= params.physical.temp_bias_min
+    @test TI_var.temp_bias <= params.physical.temp_bias_max
 
     # The modelled MB with the calibrated model should be very close to the target
     mb_cal = compute_mean_annual_MB(
@@ -73,8 +84,9 @@ function calibrate_ti_model_test()
     calibrate_MB_model!(model, [glacier], params)
     @test model.mass_balance isa Vector{<:TImodel1}
     @test length(model.mass_balance) == 1
-    # get_mb_model should return the per-glacier model, matching the direct fit
-    @test get_mb_model(model.mass_balance, 1).DDF ≈ TI_cal.DDF
+    # get_mb_model should return the per-glacier model, matching the variable calibration
+    # (calibrate_MB_model! uses default variable prcp_fac, so compare against TI_var)
+    @test get_mb_model(model.mass_balance, 1).DDF ≈ TI_var.DDF
 
     # --- get_mb_model dispatch: single shared model vs per-glacier vector --------
     single = TImodel1(params)
@@ -106,13 +118,15 @@ function calibrate_ti_model_temp_bias_test()
     # Set a strongly negative target that DDF_max + prcp_fac_min together still
     # can't reach — forcing step 3 (temp_bias). A large positive temp_bias (warmer
     # climate) increases melt and converts snow to rain, making MB more negative.
+    # Use prcp_fac=1.0 (fixed) for reproducibility; with variable prcp_fac from
+    # winter precip, the calibration dynamics may differ.
     extreme_target = Sleipnir.Float(-5.0)  # -5 m w.e. yr⁻¹ — unreachable by DDF/prcp_fac alone
     dhdt_data = Sleipnir.DhdtData(
         (Sleipnir.Float(calibration_tspan[1]), Sleipnir.Float(calibration_tspan[2])),
         extreme_target)
     glacier_extreme = Sleipnir.Glacier2D(glacier; dhdtData = dhdt_data, geodetic_MB = extreme_target)
 
-    TI_tb = calibrate_ti_model(glacier_extreme, params)
+    TI_tb = calibrate_ti_model(glacier_extreme, params; prcp_fac = 1.0)
     @test TI_tb isa TImodel1
     # temp_bias must have been used (non-zero) since DDF/prcp_fac couldn't bracket
     @test TI_tb.temp_bias != Sleipnir.Float(0.0)
