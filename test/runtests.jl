@@ -37,7 +37,7 @@ using Aqua
 
 include("TI.jl")
 include("MB.jl")
-include("Calibration.jl")
+include("calibration.jl")
 include("Aqua.jl")
 
 # Activate to avoid GKS backend Plot issues in the JupyterHub
