@@ -36,7 +36,7 @@ function calibrate_ti_model_test()
     dhdt_data = Sleipnir.DhdtData(
         (Sleipnir.Float(calibration_tspan[1]), Sleipnir.Float(calibration_tspan[2])),
         geodetic_mb)
-    glacier = Sleipnir.Glacier2D(glacier; dhdtData = dhdt_data, geodetic_MB = geodetic_mb)
+    glacier = Sleipnir.Glacier2D(glacier; dhdtData = dhdt_data)
 
     # --- compute_mean_annual_MB: verify it returns a finite scalar ---------------
     TI_default = TImodel1(params)
@@ -81,7 +81,7 @@ function calibrate_ti_model_test()
 
     # --- calibrate_MB_model!: high-level entry point expands to a per-glacier vector
     model = Sleipnir.Model(; iceflow = nothing, mass_balance = TImodel1(params))
-    calibrate_MB_model!(model, [glacier], params)
+    model = calibrate_MB_model!(model, [glacier], params)
     @test model.mass_balance isa Vector{<:TImodel1}
     @test length(model.mass_balance) == 1
     # get_mb_model should return the per-glacier model, matching the variable calibration
@@ -126,7 +126,7 @@ function calibrate_ti_model_temp_bias_test()
     dhdt_data = Sleipnir.DhdtData(
         (Sleipnir.Float(calibration_tspan[1]), Sleipnir.Float(calibration_tspan[2])),
         extreme_target)
-    glacier_extreme = Sleipnir.Glacier2D(glacier; dhdtData = dhdt_data, geodetic_MB = extreme_target)
+    glacier_extreme = Sleipnir.Glacier2D(glacier; dhdtData = dhdt_data)
 
     TI_tb = calibrate_ti_model(glacier_extreme, params; prcp_fac = 1.0)
     @test TI_tb isa TImodel1

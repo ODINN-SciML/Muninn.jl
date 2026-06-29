@@ -152,37 +152,39 @@ A static glacier geometry is assumed throughout (no ice-flow dynamics).
 This is the per-glacier building block used by [`calibrate_MB_model!`](@ref) to
 build a per-glacier vector of calibrated models.
 
-# Reference
+# References
 
 Hugonnet, R. et al. (2021). Accelerated global glacier mass loss in the early
 twenty-first century. *Nature*, 592, 726–731.
 https://doi.org/10.1038/s41586-021-03436-z
+
+Maussion, F., Butenko, A., Eis, J., Fourteau, K., Jarosch, A. H., Landmann, J.,
+Oesterle, F., Recinos, B., USias, S., Valsecchi, L., Marzeion, B., and Cogley,
+J. G. (2019). The Open Global Glacier Model (OGGM) v1.1. *Geoscientific Model
+Development*, 12, 909–941.
+https://doi.org/10.5194/gmd-12-909-2019
 """
 function calibrate_ti_model(
-        glacier::AbstractGlacier,
+        glacier::G,
         params::Parameters;
-        DDF_bounds::Tuple{Sleipnir.Float, Sleipnir.Float} = (
-            Sleipnir.Float(params.physical.DDF_min),
-            Sleipnir.Float(params.physical.DDF_max)),
-        prcp_fac_bounds::Tuple{Sleipnir.Float, Sleipnir.Float} = (
-            Sleipnir.Float(params.physical.prcp_fac_min),
-            Sleipnir.Float(params.physical.prcp_fac_max)),
-        temp_bias_bounds::Tuple{Sleipnir.Float, Sleipnir.Float} = (
-            Sleipnir.Float(params.physical.temp_bias_min),
-            Sleipnir.Float(params.physical.temp_bias_max)),
-        density_ratio::Sleipnir.Float = Sleipnir.Float(1.0),
-        calibration_period::Union{Nothing, Tuple{Sleipnir.Float, Sleipnir.Float}} = nothing,
+        DDF_bounds::Tuple{<:AbstractFloat, <:AbstractFloat} = (
+            params.physical.DDF_min, params.physical.DDF_max),
+        prcp_fac_bounds::Tuple{<:AbstractFloat, <:AbstractFloat} = (
+            params.physical.prcp_fac_min, params.physical.prcp_fac_max),
+        temp_bias_bounds::Tuple{<:AbstractFloat, <:AbstractFloat} = (
+            params.physical.temp_bias_min, params.physical.temp_bias_max),
+        density_ratio::Real = 1.0,
+        calibration_period::Union{Nothing, Tuple{<:AbstractFloat, <:AbstractFloat}} = nothing,
         prcp_fac::Union{Symbol, Real} = :from_winter_prcp,
-        step::Sleipnir.Float = Sleipnir.Float(1.0 / 12.0))
-    mb_observation = glacier.geodetic_MB
-
-    if !isfinite(mb_observation)
+        step::Real = 1.0 / 12.0) where {G <: AbstractGlacier}
+    if isnothing(glacier.dhdtData) || !isfinite(glacier.dhdtData.dhdt)
         throw(ArgumentError(
-            "glacier.geodetic_MB is not available. Geodetic mass-balance observations " *
-            "are required for TI model calibration. " *
-            "Please populate glacier.geodetic_MB (e.g. from Hugonnet et al. 2021) " *
+            "glacier.dhdtData.dhdt is not available for $(glacier.rgi_id). " *
+            "Geodetic mass-balance observations are required for TI model calibration. " *
+            "Please populate glacier.dhdtData (e.g. from Hugonnet et al. 2021) " *
             "before calling calibrate_ti_model."))
     end
+    mb_observation = glacier.dhdtData.dhdt
 
     # Determine calibration period
     t_start,
@@ -283,15 +285,15 @@ end
     ) -> Sleipnir.Model
 
 High-level entry point that calibrates the mass balance model of `model`
-per glacier against geodetic observations, mutating and returning `model`.
+per glacier against geodetic observations, returning a (possibly new) `model`.
 
 The behaviour dispatches on the mass balance model type:
 
-  - `TImodel1`: `model.mass_balance` is replaced by a per-glacier vector of
+  - `TImodel1`: returns a new `Model` whose `mass_balance` is a per-glacier vector of
     `TImodel1`s, each fitted against its glacier's geodetic mass balance with
     [`calibrate_ti_model`](@ref).  Glaciers without `dhdtData` keep the original
     (uncalibrated) model and a warning is emitted.  If no glacier carries geodetic
-    data, the model is left unchanged.
+    data, the model is returned unchanged.
   - any other [`MBmodel`](@ref): no-op — no calibration routine is defined, so the
     model is returned untouched.  Add a `_calibrate_MB_model!(model, ::YourType, …)`
     method to support a new model type.
@@ -320,20 +322,37 @@ function _calibrate_MB_model!(
 end
 
 # TImodel1: fit one model per glacier against its geodetic mass balance.
+# The outer function is parametric in G so the pmap closure captures G as a
+# concrete type parameter. The `glacier::G` typeassert inside the closure
+# narrows pmap's Channel{Any} element to G, keeping calibrate_ti_model
+# dispatch and _brent fully type-stable for JET.
 function _calibrate_MB_model!(
         model, template::TImodel1,
-        glaciers::Vector{<:AbstractGlacier}, params::Parameters; kwargs...)
+        glaciers::Vector{G}, params::Parameters;
+        kwargs...) where {G <: AbstractGlacier}
     # Without any geodetic observations there is nothing to calibrate against.
     any(g -> !isnothing(g.dhdtData), glaciers) || return model
-    model.mass_balance = pmap(glaciers) do glacier
+    results = pmap(glaciers) do glacier_any
+        glacier = glacier_any::G
         if isnothing(glacier.dhdtData)
             @warn "calibrate_MB_model!: skipping glacier $(glacier.rgi_id) " *
                   "because dhdtData is nothing."
-            return template  # immutable model → safe to share, no copy needed
+            return template
         end
         return calibrate_ti_model(glacier, params; kwargs...)
     end
-    return model
+    calibrated = _narrow_models(typeof(template), results)
+    return Sleipnir.Model(model.iceflow, calibrated, model.trainable_components)
+end
+
+# Narrow the pmap result (Vector{Any} via Channel{Any}) to the concrete model
+# type via per-element typeasserts so the rebuilt Model stays type-stable.
+function _narrow_models(::Type{T}, results::AbstractVector) where {T}
+    out = Vector{T}(undef, length(results))
+    @inbounds for i in eachindex(results)
+        out[i] = results[i]::T
+    end
+    return out
 end
 
 # ---- private root-finder -----------------------------------------------
