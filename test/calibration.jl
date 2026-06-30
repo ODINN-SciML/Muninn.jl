@@ -16,11 +16,6 @@ function _calibration_test_params(rgi_ids, calibration_tspan)
 end
 
 function calibrate_ti_model_test()
-    # Workers spawned by earlier tests only have Sleipnir loaded; they lack
-    # Muninn's calibrate_ti_model and would error when pmap dispatches to them.
-    # Subsequent tests in this suite use multiprocessing=false so no re-spawn needed.
-    nworkers() > 1 && rmprocs(workers())
-
     rgi_ids = ["RGI60-11.03638"]
 
     # Calibration period: 2000-2020 (Hugonnet et al.)

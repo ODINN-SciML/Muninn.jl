@@ -28,7 +28,6 @@ function compute_cumulative_MB(
         t_end::F;
         step::F = F(1.0 / 12.0)) where {F <: AbstractFloat}
     total_mb = zeros(Sleipnir.Float, size(glacier.S))
-    n_steps = 0
     t = t_start + step
     while t <= t_end + step / 2
         get_cumulative_climate!(glacier.climate, Sleipnir.Float(t), Sleipnir.Float(step))
@@ -40,10 +39,8 @@ function compute_cumulative_MB(
             include_topography = false,
             temp_bias = mb_model.temp_bias)
         total_mb .+= compute_MB(mb_model, climate_2D, Sleipnir.Float(step))
-        n_steps += 1
         t += step
     end
-    n_steps == 0 && return zeros(Sleipnir.Float, size(glacier.S))
     return total_mb
 end
 
@@ -67,8 +64,8 @@ function compute_mean_annual_MB(
         t_end::F;
         step::F = F(1.0 / 12.0)) where {F <: AbstractFloat}
     total_mb = compute_cumulative_MB(mb_model, glacier, t_start, t_end; step)
-    # n_steps == 0 case: compute_cumulative_MB returns a zero matrix; detect it
-    # via the glacier mask rather than re-tracking n_steps.
+    # Empty calibration window: compute_cumulative_MB returns a zero matrix,
+    # detected below via the glacier mask / iszero check.
     glacier_cells = .!glacier.mask
     !any(glacier_cells) && return Sleipnir.Float(0.0)
     n_years = Sleipnir.Float(t_end - t_start)
