@@ -1,7 +1,7 @@
 
 function TI_creation_default_test(save_refs::Bool = false)
-    params = Parameters()
-    JET.@test_opt target_modules=(Sleipnir, Muninn) Parameters()
+    params = Parameters(simulation = Sleipnir.SimulationParameters(multiprocessing = false))
+    JET.@test_opt target_modules=(Sleipnir, Muninn) Parameters(simulation = Sleipnir.SimulationParameters(multiprocessing = false))
     TI1 = TImodel1(params)
     JET.@test_opt TImodel1(params)
     TI2 = TImodel2(params)
@@ -15,8 +15,8 @@ function TI_creation_default_test(save_refs::Bool = false)
 end
 
 function TI_creation_values_test(save_refs::Bool = false)
-    params = Parameters()
-    JET.@test_opt target_modules=(Sleipnir, Muninn) Parameters()
+    params = Parameters(simulation = Sleipnir.SimulationParameters(multiprocessing = false))
+    JET.@test_opt target_modules=(Sleipnir, Muninn) Parameters(simulation = Sleipnir.SimulationParameters(multiprocessing = false))
     TI1 = TImodel1(
         params;
         DDF = 6.0/1000.0,
@@ -48,7 +48,7 @@ function TI_creation_values_test(save_refs::Bool = false)
 end
 
 function TI_synthetic_field_test()
-    params = Parameters()
+    params = Parameters(simulation = Sleipnir.SimulationParameters(multiprocessing = false))
     F = Sleipnir.Float
 
     snow = F[2.0 0.5; 0.0 1.0]
