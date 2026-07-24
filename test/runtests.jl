@@ -27,6 +27,7 @@ if !parse(Bool, get(ENV, "CI", "false"))
 end
 using Muninn
 using Sleipnir: Parameters, Model
+using Distributed
 using Test
 using JLD2
 using Infiltrator
@@ -36,6 +37,7 @@ using Aqua
 
 include("TI.jl")
 include("MB.jl")
+include("calibration.jl")
 include("Aqua.jl")
 
 # Activate to avoid GKS backend Plot issues in the JupyterHub
@@ -47,5 +49,8 @@ ENV["GKSwstype"]="nul"
     @testset "Synthetic TI MB field" TI_synthetic_field_test()
     @testset "MB compatibility helpers" model_compatibility_utils_test()
     @testset "Apply MB model" apply_MB_test()
+    @testset "Calibrate TI model" calibrate_ti_model_test()
+    @testset "Calibrate TI model — temp_bias step" calibrate_ti_model_temp_bias_test()
+    @testset "Default geodetic MB loading" calibrate_ti_model_default_dhdt_test()
     @testset "Aqua" test_Aqua()
 end

@@ -17,9 +17,11 @@ Muninn.mb_inputs(::DummyMBTopoInputs) = (; slope = Sleipnir.iTopoSlope())
 
 function model_compatibility_utils_test()
     params_era5 = Parameters(
-        simulation = Sleipnir.SimulationParameters(climate_data_source = :ERA5))
+        simulation = Sleipnir.SimulationParameters(
+        climate_data_source = :ERA5, multiprocessing = false))
     params_w5e5 = Parameters(
-        simulation = Sleipnir.SimulationParameters(climate_data_source = :W5E5))
+        simulation = Sleipnir.SimulationParameters(
+        climate_data_source = :W5E5, multiprocessing = false))
 
     # Default MB model imposes no climate source constraint.
     @test isnothing(validate_climate_data_source(DummyMBDefault(), :W5E5))
@@ -55,6 +57,7 @@ function apply_MB_test(save_refs::Bool = false)
         use_velocities = false,
         tspan = (2010.0, 2015.0),
         test_mode = true,
+        multiprocessing = false,
         rgi_paths = rgi_paths),
     )
     JET.@test_opt target_modules=(Sleipnir, Muninn) Parameters(
@@ -63,6 +66,7 @@ function apply_MB_test(save_refs::Bool = false)
         use_velocities = false,
         tspan = (2010.0, 2015.0),
         test_mode = true,
+        multiprocessing = false,
         rgi_paths = rgi_paths),
     )
     glacier = initialize_glaciers(rgi_ids, params)[1]
