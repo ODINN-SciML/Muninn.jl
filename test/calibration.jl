@@ -74,13 +74,13 @@ function calibrate_ti_model_test()
     @test isfinite(mb_cal)
     @test abs(mb_cal - geodetic_mb) < 1e-4  # within 0.1 mm w.e. yr⁻¹
 
-    # --- calibrate_MB_model!: high-level entry point expands to a per-glacier vector
+    # --- calibrate_MB_model: high-level entry point expands to a per-glacier vector
     model = Sleipnir.Model(; iceflow = nothing, mass_balance = TImodel1(params))
-    model = calibrate_MB_model!(model, [glacier], params)
+    model = calibrate_MB_model(model, [glacier], params)
     @test model.mass_balance isa Vector{<:TImodel1}
     @test length(model.mass_balance) == 1
     # get_mb_model should return the per-glacier model, matching the variable calibration
-    # (calibrate_MB_model! uses default variable prcp_fac, so compare against TI_var)
+    # (calibrate_MB_model uses default variable prcp_fac, so compare against TI_var)
     @test get_mb_model(model.mass_balance, 1).DDF ≈ TI_var.DDF
 
     # --- get_mb_model dispatch: single shared model vs per-glacier vector --------
@@ -89,12 +89,11 @@ function calibrate_ti_model_test()
     @test get_mb_model(single, 7) === single
     @test get_mb_model(model.mass_balance, 1) === model.mass_balance[1]
 
-    # --- calibrate_MB_model! is a no-op without a calibration routine ------------
+    # --- calibrate_MB_model is a no-op without a calibration routine ------------
     # TImodel2 has no calibration method, so the model is returned unchanged.
     ti2 = TImodel2(params)
     model2 = Sleipnir.Model(; iceflow = nothing, mass_balance = ti2)
-    calibrate_MB_model!(model2, [glacier], params)
-    @test model2.mass_balance === ti2              # left untouched (not vectorized)
+    @test calibrate_MB_model(model2, [glacier], params).mass_balance === ti2
 
     # --- calibration_period override --------------------------------------------
     TI_override = calibrate_ti_model(
