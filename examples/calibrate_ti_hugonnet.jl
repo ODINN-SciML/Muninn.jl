@@ -52,9 +52,9 @@ const WGMS_GLACIERS = [
 const CALIBRATION_TSPAN = (2000.0, 2020.0)
 
 # Standalone Muninn runs single-process (multiprocessing is handled by Huginn/ODINN).
-# At scale (hundreds/thousands of glaciers), use calibrate_MB_model! via a
+# At scale (hundreds/thousands of glaciers), use calibrate_MB_model via a
 # Huginn Prediction or ODINN Inversion — their Parameters constructor loads Muninn
-# on the workers so the pmap in calibrate_MB_model! distributes automatically.
+# on the workers so the pmap in calibrate_MB_model distributes automatically.
 params = Sleipnir.Parameters(
     simulation = Sleipnir.SimulationParameters(
     tspan = CALIBRATION_TSPAN,
@@ -104,16 +104,16 @@ end
 #
 # It returns a fresh TImodel1 with calibrated (DDF, prcp_fac, temp_bias).
 # To calibrate the MB model of a whole simulation, use
-# calibrate_MB_model!(model, glaciers, params) instead (or just set
+# calibrate_MB_model(model, glaciers, params) instead (or just set
 # `calibrate_MB = true` in SimulationParameters).
 
 # TI1 calibration uses static glacier geometry, so no iceflow model is needed
 # (the Model.iceflow field is never read during calibration).
-# calibrate_MB_model! expands the single TImodel1 template into a per-glacier
+# calibrate_MB_model expands the single TImodel1 template into a per-glacier
 # vector of calibrated models, running the fits under pmap — distributed across
 # workers when multiprocessing = true.
 model = Model(; iceflow = nothing, mass_balance = TImodel1(params))
-calibrate_MB_model!(model, glaciers, params)
+model = calibrate_MB_model(model, glaciers, params)
 calibrated_models = model.mass_balance
 
 # ============================================================================

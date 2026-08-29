@@ -1,5 +1,5 @@
 
-export calibrate_MB_model!, calibrate_ti_model, compute_mean_annual_MB,
+export calibrate_MB_model, calibrate_ti_model, compute_mean_annual_MB,
        compute_cumulative_MB
 
 ###############################################
@@ -146,7 +146,7 @@ A static glacier geometry is assumed throughout (no ice-flow dynamics).
 
   - A `TImodel1{Sleipnir.Float}` with calibrated `DDF`, `prcp_fac`, and `temp_bias`.
 
-This is the per-glacier building block used by [`calibrate_MB_model!`](@ref) to
+This is the per-glacier building block used by [`calibrate_MB_model`](@ref) to
 build a per-glacier vector of calibrated models.
 
 # References
@@ -275,14 +275,18 @@ function calibrate_ti_model(
 end
 
 """
-    calibrate_MB_model!(
+    calibrate_MB_model(
         model::Sleipnir.Model,
         glaciers::Vector{<:AbstractGlacier},
         params::Parameters,
     ) -> Sleipnir.Model
 
 High-level entry point that calibrates the mass balance model of `model`
-per glacier against geodetic observations, returning a (possibly new) `model`.
+per glacier against geodetic observations, returning a new `model`.
+
+Calibration cannot happen in place: for `TImodel1` it replaces a single model by one
+model per glacier, which changes the type of the `mass_balance` field. Callers must use
+the return value; discarding it silently keeps the uncalibrated model.
 
 The behaviour dispatches on the mass balance model type:
 
@@ -292,7 +296,7 @@ The behaviour dispatches on the mass balance model type:
     (uncalibrated) model and a warning is emitted.  If no glacier carries geodetic
     data, the model is returned unchanged.
   - any other [`MBmodel`](@ref): no-op — no calibration routine is defined, so the
-    model is returned untouched.  Add a `_calibrate_MB_model!(model, ::YourType, …)`
+    model is returned untouched.  Add a `_calibrate_MB_model(model, ::YourType, …)`
     method to support a new model type.
 
 An already-vectorized (per-glacier) mass balance model is left unchanged.  Any
@@ -301,7 +305,7 @@ keyword arguments are forwarded to the type-specific calibrator (e.g.
 `Prediction` and `Inversion` constructors call when
 `params.simulation.calibrate_MB` is `true`.
 """
-function calibrate_MB_model!(
+function calibrate_MB_model(
         model::Sleipnir.Model,
         glaciers::Vector{<:AbstractGlacier},
         params::Parameters;
@@ -309,11 +313,11 @@ function calibrate_MB_model!(
     # Nothing to do for empty or already per-glacier mass balance models.
     isnothing(model.mass_balance) && return model
     model.mass_balance isa AbstractVector && return model
-    return _calibrate_MB_model!(model, model.mass_balance, glaciers, params; kwargs...)
+    return _calibrate_MB_model(model, model.mass_balance, glaciers, params; kwargs...)
 end
 
 # Default: mass balance models without a calibration routine are left untouched.
-function _calibrate_MB_model!(
+function _calibrate_MB_model(
         model, ::MBmodel, ::Vector{<:AbstractGlacier}, ::Parameters; kwargs...)
     return model
 end
@@ -323,7 +327,7 @@ end
 # concrete type parameter. The `glacier::G` typeassert inside the closure
 # narrows pmap's Channel{Any} element to G, keeping calibrate_ti_model
 # dispatch and _brent fully type-stable for JET.
-function _calibrate_MB_model!(
+function _calibrate_MB_model(
         model, template::TImodel1,
         glaciers::Vector{G}, params::Parameters;
         kwargs...) where {G <: AbstractGlacier}
@@ -332,7 +336,7 @@ function _calibrate_MB_model!(
     results = pmap(glaciers) do glacier_any
         glacier = glacier_any::G
         if isnothing(glacier.dhdtData)
-            @warn "calibrate_MB_model!: skipping glacier $(glacier.rgi_id) " *
+            @warn "calibrate_MB_model: skipping glacier $(glacier.rgi_id) " *
                   "because dhdtData is nothing."
             return template
         end
