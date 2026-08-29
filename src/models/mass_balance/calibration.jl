@@ -282,7 +282,7 @@ end
     ) -> Sleipnir.Model
 
 High-level entry point that calibrates the mass balance model of `model`
-per glacier against geodetic observations, returning a (possibly new) `model`.
+per glacier against geodetic observations, returning a new `model`.
 
 Calibration cannot happen in place: for `TImodel1` it replaces a single model by one
 model per glacier, which changes the type of the `mass_balance` field. Callers must use
