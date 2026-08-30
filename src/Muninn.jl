@@ -20,9 +20,8 @@ using Sleipnir: Parameters, Model
 # ############    PARAMETERS     ###############
 # ##############################################
 
-cd(@__DIR__)
-const global root_dir::String = dirname(Base.current_project())
-const global root_plots::String = joinpath(root_dir, "plots")
+const src_dir::String = dirname(@__FILE__)
+const global root_dir::String = joinpath(src_dir, "..")
 
 # Physical constants for mass balance computation
 # Unit conversion: 1 mm of precipitation = 0.001 m w.e.
@@ -30,9 +29,9 @@ const PRECIP_UNIT_CONVERSION = Sleipnir.Float(1.0 / 1000.0)
 export PRECIP_UNIT_CONVERSION
 
 # All structures and functions related to ODINN models
-include("models/mass_balance/MBmodel.jl")
+include(src_dir*"/models/mass_balance/MBmodel.jl")
 
 # Plotting utilities
-include("plotting/plotting_utils.jl")
+include(src_dir*"/plotting/plotting_utils.jl")
 
 end # module
