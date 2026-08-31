@@ -4,7 +4,6 @@ version = "0.13.0"
 authors = ["Jordi Bolibar <jordi.bolibar@gmail.com>"]
 
 [deps]
-BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 Infiltrator = "5903a43b-9cc3-4c30-8d17-598619ec4e9b"
@@ -12,13 +11,10 @@ JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
 Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
-Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 Sleipnir = "f5e6c550-199f-11ee-3608-394420200519"
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
 Aqua = "0.8"
-BenchmarkTools = "1"
 Dates = "1.11"
 Distributed = "1.11"
 Infiltrator = "1.8, 1.9"
@@ -35,7 +31,8 @@ julia = "1.11"
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "Aqua", "JET"]
+test = ["Aqua", "JET", "Revise", "Test"]
