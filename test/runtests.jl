@@ -37,6 +37,7 @@ using Aqua
 
 include("TI.jl")
 include("MB.jl")
+include("MB_rhs.jl")
 include("calibration.jl")
 include("Aqua.jl")
 
@@ -49,6 +50,13 @@ ENV["GKSwstype"]="nul"
     @testset "Synthetic TI MB field" TI_synthetic_field_test()
     @testset "MB compatibility helpers" model_compatibility_utils_test()
     @testset "Apply MB model" apply_MB_test()
+    @testset "MB smoothstep ramp" smoothstep_test()
+    @testset "MB surface dependence trait" mb_S_dependence_test()
+    @testset "MB elevation lookup table" elevation_lut_test()
+    @testset "MB RHS cache construction" mb_cache_init_test()
+    @testset "MB window indexing" mb_window_index_test()
+    @testset "MB rate integrates to compute_MB" mb_rate_matches_compute_MB_test()
+    @testset "MB rate ramps" mb_rate_ramp_test()
     @testset "Calibrate TI model" calibrate_ti_model_test()
     @testset "Calibrate TI model — temp_bias step" calibrate_ti_model_temp_bias_test()
     @testset "Default geodetic MB loading" calibrate_ti_model_default_dhdt_test()
