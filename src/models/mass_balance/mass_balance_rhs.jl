@@ -344,6 +344,8 @@ outside it throws rather than extrapolating.
 """
 function init_mb_cache(mb_model::TImodel1, simulation, glacier_idx::Integer, θ)
     F = Sleipnir.Float
+    # A simulation stand-in that carries no parameters cannot ask for the continuous scheme
+    hasproperty(simulation, :parameters) || return _empty_mb_cache(F)
     simparams = simulation.parameters.simulation
     (simparams.use_MB && simparams.MB_scheme == :continuous) || return _empty_mb_cache(F)
 
