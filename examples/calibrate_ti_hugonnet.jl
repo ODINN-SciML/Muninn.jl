@@ -81,8 +81,8 @@ glaciers = initialize_glaciers(WGMS_GLACIERS, params)
 
 # Verify all glaciers have geodetic MB data
 for glacier in glaciers
-    if isnothing(glacier.dhdtData) || !isfinite(glacier.geodetic_MB)
-        @warn "Glacier $(glacier.rgi_id) is missing Hugonnet geodetic MB data. Skipping."
+    if isnothing(glacier.dhdtData)
+        @warn "Glacier $(glacier.rgi_id) ($(glacierName(glacier.rgi_id))) is missing Hugonnet geodetic MB data. Skipping."
     end
 end
 
@@ -128,14 +128,14 @@ println(repeat("=", 80))
 default_model = TImodel1(params)
 
 for (i, (glacier, cal_model)) in enumerate(zip(glaciers, calibrated_models))
-    println("\n[$(i)] Glacier: $(glacier.rgi_id)")
+    println("\n[$(i)] Glacier: $(glacier.rgi_id) ($(glacierName(glacier.rgi_id)))")
 
     # Display input data
     println("  📊 Input:")
     glacier_cells = count(.!glacier.mask)
     area_m2 = glacier_cells * abs(glacier.Δx * glacier.Δy)
     println("    Area: $(round(area_m2 / 1e6; digits=2)) km²")
-    println("    Hugonnet geodetic MB: $(round(glacier.geodetic_MB; digits=4)) m w.e. yr⁻¹")
+    println("    Hugonnet geodetic MB: $(round(glacier.dhdtData.dhdt; digits=4)) m w.e. yr⁻¹")
 
     # Display default model MB for comparison
     default_mb = compute_mean_annual_MB(
@@ -148,7 +148,7 @@ for (i, (glacier, cal_model)) in enumerate(zip(glaciers, calibrated_models))
     # Display calibrated parameters
     println("  ✅ Calibrated TImodel1:")
     println("    DDF: $(round(cal_model.DDF * 1000; digits=4)) mm w.e. °C⁻¹ d⁻¹")
-    println("    prcp_fac: $(cal_model.prcp_fac)")
+    println("    prcp_fac: $(round(cal_model.prcp_fac; digits=4))")
     println("    temp_bias: $(round(cal_model.temp_bias; digits=4)) °C")
 
     # Validate: compute MB with calibrated model
@@ -157,11 +157,11 @@ for (i, (glacier, cal_model)) in enumerate(zip(glaciers, calibrated_models))
         Sleipnir.Float(CALIBRATION_TSPAN[1]),
         Sleipnir.Float(CALIBRATION_TSPAN[2])
     )
-    mb_error = cal_mb - glacier.geodetic_MB
+    mb_error = cal_mb - glacier.dhdtData.dhdt
     println("  🎯 Validation:")
     println("    Calibrated model MB: $(round(cal_mb; digits=4)) m w.e. yr⁻¹")
     println("    Error vs Hugonnet: $(round(mb_error; digits=6)) m w.e. yr⁻¹")
-    println("    Relative error: $(round(abs(mb_error / glacier.geodetic_MB) * 100; digits=2))%")
+    println("    Relative error: $(round(abs(mb_error / glacier.dhdtData.dhdt) * 100; digits=2))%")
 end
 
 println(repeat("=", 80))
