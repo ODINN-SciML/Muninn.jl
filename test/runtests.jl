@@ -57,6 +57,7 @@ ENV["GKSwstype"]="nul"
     @testset "MB window indexing" mb_window_index_test()
     @testset "MB rate integrates to compute_MB" mb_rate_matches_compute_MB_test()
     @testset "MB rate ramps" mb_rate_ramp_test()
+    @testset "MB rate derivative vs finite differences" mb_rate_∂H_test()
     @testset "Calibrate TI model" calibrate_ti_model_test()
     @testset "Calibrate TI model — temp_bias step" calibrate_ti_model_temp_bias_test()
     @testset "Default geodetic MB loading" calibrate_ti_model_default_dhdt_test()

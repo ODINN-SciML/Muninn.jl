@@ -209,8 +209,9 @@ function mb_rate_matches_compute_MB_test()
 
     H = glacier.H₀
     glacier.S .= glacier.B .+ H
-    # Saturated ramps, so ramp == 1 for accumulation (H_acc) and ablation (H_abl) alike.
-    saturated = H .>= Muninn.H_ACC_DEFAULT
+    # Saturated ramps, so ramp == 1 for accumulation and ablation alike. The accumulation
+    # ramp is centred on H_acc, so it only saturates half a width above it.
+    saturated = H .>= Muninn.H_ACC_DEFAULT + Muninn.H_ACC_W_DEFAULT / 2
     @test count(saturated) > 100
 
     for k in (1, 6, 12)
@@ -291,4 +292,78 @@ function mb_rate_ramp_test()
     first_pass = copy(cache.ṁ)
     MB_rate!(cache.ṁ, glacier.H₀, cache, mb_model, glacier, t)
     @test cache.ṁ == first_pass
+end
+
+function mb_rate_∂H_test()
+    s = _mb_rhs_setup()
+    glacier, mb_model = s.glacier, s.mb_model
+    cache = Sleipnir.init_mb_cache(mb_model, s.simulation, 1, nothing)
+    t = s.tspan[1] + 6 * s.step_MB
+    sz = size(glacier.H₀)
+    lut = cache.lut
+
+    ∂ = similar(glacier.H₀)
+    ṁp = similar(glacier.H₀)
+    ṁm = similar(glacier.H₀)
+
+    # Cells sitting on a lookup table knot are excluded throughout: the table is piecewise
+    # linear there, so a two-sided difference straddles two segments and measures neither
+    # one-sided slope. That is a genuine kink, not an error in the derivative.
+    lut_interior(H) = begin
+        x = (glacier.B .+ H .- cache.ref_hgt .- lut.ΔS_min) .* lut.inv_dΔS
+        0.1 .< (x .- floor.(x)) .< 0.9
+    end
+
+    # Past both ramps smoothstep saturates, so ṁ is exactly linear in H inside a segment
+    # and the central difference is exact to roundoff.
+    H = fill(120.0, sz)
+    MB_rate_∂H!(∂, H, cache, mb_model, glacier, t)
+    keep = lut_interior(H)
+    # An absolute count, not a fraction: B is clustered modulo the table spacing, so a
+    # uniform shift in H moves every cell's position within its segment together.
+    @test count(keep) > 1000
+
+    ε = 1e-3
+    MB_rate!(ṁp, H .+ ε, cache, mb_model, glacier, t)
+    MB_rate!(ṁm, H .- ε, cache, mb_model, glacier, t)
+    fd = (ṁp .- ṁm) ./ (2ε)
+    # Perturbing the whole field at once also rules out off-diagonal coupling: if ṁ at a
+    # cell depended on any neighbour's H, this would not match the diagonal derivative.
+    @test maximum(abs.(fd[keep] .- ∂[keep])) < 1e-8
+    # And the feedback is a real quantity, not accidentally zero everywhere.
+    @test maximum(abs.(∂[keep])) > 1e-4
+
+    # Perturbing one cell isolates one diagonal entry and shows nothing else moves.
+    idx = findall(keep)
+    for I in idx[round.(Int, range(1, length(idx); length = 5))]
+        Hp = copy(H)
+        Hp[I] += ε
+        Hm = copy(H)
+        Hm[I] -= ε
+        MB_rate!(ṁp, Hp, cache, mb_model, glacier, t)
+        MB_rate!(ṁm, Hm, cache, mb_model, glacier, t)
+        @test isapprox((ṁp[I] - ṁm[I]) / (2ε), ∂[I]; atol = 1e-8)
+        @test count(!iszero, ṁp .- ṁm) == 1
+    end
+
+    # Inside the ramp both factors of rate * ramp depend on H, so this is what actually
+    # exercises the product rule.
+    H_ramp = fill(0.5 * Muninn.H_ABL_DEFAULT, sz)
+    MB_rate_∂H!(∂, H_ramp, cache, mb_model, glacier, t)
+    ε_r = 1e-5
+    MB_rate!(ṁp, H_ramp .+ ε_r, cache, mb_model, glacier, t)
+    MB_rate!(ṁm, H_ramp .- ε_r, cache, mb_model, glacier, t)
+    fd_r = (ṁp .- ṁm) ./ (2ε_r)
+    # Cells whose rate changes sign across the perturbation swap ramp branch, the other
+    # genuine kink, and are excluded for the same reason as the knots.
+    keep_r = lut_interior(H_ramp) .& (sign.(ṁp) .== sign.(ṁm))
+    @test count(keep_r) > 1000
+    @test maximum(abs.(fd_r[keep_r] .- ∂[keep_r])) < 1e-5
+
+    # Below the ice margin the source and its derivative both vanish, so the adjoint sees
+    # no feedback on bare ground.
+    MB_rate_∂H!(∂, zeros(sz), cache, mb_model, glacier, t)
+    @test all(iszero, ∂)
+    MB_rate_∂H!(∂, fill(-5.0, sz), cache, mb_model, glacier, t)
+    @test all(iszero, ∂)
 end
