@@ -237,10 +237,10 @@ The RHS is called many times per mass balance window and must not touch `Rasters
 climate is sliced up front into [`ClimateWindow`](@ref)s and, for models whose rate depends
 on the surface only through `ΔS`, collapsed further into an [`ElevationLUT`](@ref).
 
-An *empty* cache (no windows, empty table) is what gets built whenever mass balance is not
-being evaluated in the RHS — mass balance switched off, or `MB_scheme = :discrete`. Keeping
-the type the same either way means `ModelCache` stays concretely typed and the discrete path
-pays neither the memory nor the build time. Use [`mb_cache_active`](@ref) to tell them apart.
+An *empty* cache (no windows, empty table) is what gets built when mass balance is switched
+off. Keeping the type the same either way means `ModelCache` stays concretely typed and a run
+without mass balance pays neither the memory nor the build time. Use
+[`mb_cache_active`](@ref) to tell them apart.
 
 # Fields
 
@@ -380,7 +380,7 @@ function MB_rate!(
         glacier::Sleipnir.AbstractGlacier, t::Real)
     mb_cache_active(cache) || throw(ArgumentError(
         "MB_rate! called with an inactive mass balance cache. The cache is only " *
-        "populated when use_MB is true and MB_scheme is :continuous."))
+        "populated when use_MB is true."))
     get_temp_bias(mb_model) == cache.temp_bias || throw(ArgumentError(
         "Mass balance model temp_bias = $(get_temp_bias(mb_model)) °C does not match " *
         "the $(cache.temp_bias) °C baked into the lookup table. Rebuild the cache."))
@@ -437,7 +437,7 @@ function MB_rate_∂H!(
         glacier::Sleipnir.AbstractGlacier, t::Real)
     mb_cache_active(cache) || throw(ArgumentError(
         "MB_rate_∂H! called with an inactive mass balance cache. The cache is only " *
-        "populated when use_MB is true and MB_scheme is :continuous."))
+        "populated when use_MB is true."))
     get_temp_bias(mb_model) == cache.temp_bias || throw(ArgumentError(
         "Mass balance model temp_bias = $(get_temp_bias(mb_model)) °C does not match " *
         "the $(cache.temp_bias) °C baked into the lookup table. Rebuild the cache."))
@@ -535,8 +535,8 @@ function MB_rate!(ṁ, H, cache::MBcache, mb_model::MBmodel,
         glacier::Sleipnir.AbstractGlacier, t::Real)
     throw(ArgumentError(
         "Mass balance model $(typeof(mb_model)) cannot be evaluated as a source term in " *
-        "the ice flow RHS (mb_S_dependence = :$(mb_S_dependence(mb_model))). Use " *
-        "MB_scheme = :discrete for this model."))
+        "the ice flow RHS (mb_S_dependence = :$(mb_S_dependence(mb_model))). Implement " *
+        "MB_rate! for this model."))
 end
 
 """
@@ -544,8 +544,7 @@ end
 
 Build the [`MBcache`](@ref) for one glacier.
 
-Returns an empty cache unless mass balance is switched on *and* `MB_scheme` is
-`:continuous`, so nothing changes for the discrete path.
+Returns an empty cache when mass balance is switched off.
 
 The lookup table is sized from the elevations the glacier can reach — the lowest bed and the
 highest initial surface — padded either side. The pad is what absorbs a surface that
@@ -557,7 +556,7 @@ function init_mb_cache(mb_model::TImodel1, simulation, glacier_idx::Integer, θ)
     # A simulation stand-in that carries no parameters cannot ask for the continuous scheme
     hasproperty(simulation, :parameters) || return _empty_mb_cache(F)
     simparams = simulation.parameters.simulation
-    (simparams.use_MB && simparams.MB_scheme == :continuous) || return _empty_mb_cache(F)
+    simparams.use_MB || return _empty_mb_cache(F)
 
     glacier = simulation.glaciers[glacier_idx]
     tspan = simparams.tspan

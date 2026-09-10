@@ -56,6 +56,7 @@ ENV["GKSwstype"]="nul"
     @testset "MB RHS cache construction" mb_cache_init_test()
     @testset "MB window indexing" mb_window_index_test()
     @testset "MB rate integrates to compute_MB" mb_rate_matches_compute_MB_test()
+    @testset "MB rate agrees with the mask" mb_rate_mask_agreement_test()
     @testset "MB rate ramps" mb_rate_ramp_test()
     @testset "MB rate derivative vs finite differences" mb_rate_∂H_test()
     @testset "Calibrate TI model" calibrate_ti_model_test()

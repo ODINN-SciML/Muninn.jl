@@ -8,14 +8,14 @@ struct fakeSimulation{G, P}
     parameters::P
 end
 
-function _mb_rhs_setup(; MB_scheme::Symbol = :continuous, tspan = (2010.0, 2011.0),
+function _mb_rhs_setup(; use_MB::Bool = true, tspan = (2010.0, 2011.0),
         step_MB = 1.0/12.0, temp_bias = 0.0)
     rgi_ids = ["RGI60-11.03638"]
     rgi_paths = get_rgi_paths()
     rgi_paths = Dict(k => rgi_paths[k] for k in rgi_ids)
 
     params = Parameters(simulation = SimulationParameters(
-        use_MB = true, MB_scheme = MB_scheme, use_velocities = false,
+        use_MB = use_MB, use_velocities = false,
         tspan = tspan, step_MB = step_MB, test_mode = true,
         multiprocessing = false, rgi_paths = rgi_paths))
     glacier = initialize_glaciers(rgi_ids, params)[1]
@@ -124,7 +124,7 @@ mismatch between `mb_cache_type` and `init_mb_cache` is a type instability in th
 loop rather than an error anywhere obvious.
 """
 function mb_cache_init_test()
-    s = _mb_rhs_setup(MB_scheme = :continuous)
+    s = _mb_rhs_setup()
     cache = Sleipnir.init_mb_cache(s.mb_model, s.simulation, 1, nothing)
     @test cache isa MBcache
     @test mb_cache_active(cache)
@@ -150,17 +150,16 @@ function mb_cache_init_test()
     @test_throws ArgumentError MB_rate!(
         cache.ṁ, s.glacier.H₀, cache, stale, s.glacier, 2010.5)
 
-    # Scoped to the MB_scheme staging flag: while both schemes coexist, the discrete one
-    # must pay neither the memory nor the build time, yet keep the cache type identical so
-    # ModelCache stays concretely typed. Delete with the flag.
-    s_disc = _mb_rhs_setup(MB_scheme = :discrete)
-    cache_disc = Sleipnir.init_mb_cache(s_disc.mb_model, s_disc.simulation, 1, nothing)
-    @test typeof(cache_disc) == typeof(cache)
-    @test !mb_cache_active(cache_disc)
-    @test isempty(cache_disc.lut)
+    # A run without mass balance must pay neither the memory nor the build time, yet keep the
+    # cache type identical so that ModelCache stays concretely typed.
+    s_off = _mb_rhs_setup(use_MB = false)
+    cache_off = Sleipnir.init_mb_cache(s_off.mb_model, s_off.simulation, 1, nothing)
+    @test typeof(cache_off) == typeof(cache)
+    @test !mb_cache_active(cache_off)
+    @test isempty(cache_off.lut)
     @test_throws ArgumentError MB_rate!(
-        cache_disc.ṁ, s_disc.glacier.H₀, cache_disc, s_disc.mb_model,
-        s_disc.glacier, 2010.5)
+        cache_off.ṁ, s_off.glacier.H₀, cache_off, s_off.mb_model,
+        s_off.glacier, 2010.5)
 end
 
 function mb_window_index_test()
@@ -189,8 +188,7 @@ end
 The load-bearing test: integrating the mass balance *rate* over a window with a frozen
 surface must reproduce the window total that `compute_MB` returns.
 
-This is not a discrete-versus-continuous transition check, and it does not expire with the
-`MB_scheme` flag. `compute_MB` and `downscale_2D_climate` are the kernel Muninn calibrates
+`compute_MB` and `downscale_2D_climate` are the kernel Muninn calibrates
 `DDF`, `prcp_fac` and `temp_bias` against geodetic observations with (`calibration.jl`),
 integrating mass balance over the Hugonnet window with a fixed surface and no ice flow.
 If `MB_rate!` ever drifts from them, the model being calibrated stops being the model being
@@ -230,6 +228,69 @@ function mb_rate_matches_compute_MB_test()
         Δ = abs.(MB_integrated[saturated] .- MB_total[saturated])
         @test maximum(Δ) < 1e-3
     end
+end
+
+"""
+Check `MB_rate!` against the mask the discrete scheme applies, over the whole field rather
+than only where the ramps saturate.
+
+This is what pins the ramps to the thresholds they claim. `apply_MB_mask!` allows accumulation
+only above `H_acc` and ablation only on ice, so away from the transition bands the rate has to
+agree with `compute_MB` exactly or be exactly zero. A ramp that rises from a bare bed instead
+of switching on at the threshold still passes the saturated comparison above, and fails here:
+it feeds thin ice that the mask leaves alone.
+"""
+function mb_rate_mask_agreement_test()
+    s = _mb_rhs_setup()
+    glacier, mb_model, step_MB = s.glacier, s.mb_model, s.step_MB
+    cache = Sleipnir.init_mb_cache(mb_model, s.simulation, 1, nothing)
+
+    H = glacier.H₀
+    glacier.S .= glacier.B .+ H
+    acc_off = cache.H_acc - cache.H_acc_w / 2
+    acc_on = cache.H_acc + cache.H_acc_w / 2
+
+    # Counted over all the windows rather than each one: a summer window is ablating almost
+    # everywhere, so it has few thin accumulating cells to check.
+    n_thin_acc = 0
+
+    for k in (1, 6, 12)
+        t_k = s.tspan[1] + k * step_MB
+        get_cumulative_climate!(glacier.climate, Sleipnir.Float(t_k),
+            Sleipnir.Float(step_MB))
+        downscale_2D_climate!(glacier; temp_bias = get_temp_bias(mb_model))
+        MB_total = compute_MB(mb_model, glacier.climate.climate_2D_step, step_MB)
+
+        MB_rate!(cache.ṁ, H, cache, mb_model, glacier, t_k)
+        MB_int = cache.ṁ .* step_MB
+
+        # Ice thinner than the threshold gets no accumulation at all, as under the mask
+        thin_acc = (MB_total .> 0) .& (H .> 0) .& (H .< acc_off)
+        n_thin_acc += count(thin_acc)
+        @test all(MB_int[thin_acc] .== 0)
+
+        # Above the threshold accumulation is applied in full
+        thick_acc = (MB_total .> 0) .& (H .> acc_on)
+        count(thick_acc) > 0 &&
+            @test maximum(abs.(MB_int[thick_acc] .- MB_total[thick_acc])) < 1e-3
+
+        # Ablation is applied in full on ice thicker than its ramp, where the mask would not
+        # clip the cell to a bare bed
+        abl = (MB_total .< 0) .& (H .> cache.H_abl) .& ((H .+ MB_total) .>= 0)
+        count(abl) > 0 && @test maximum(abs.(MB_int[abl] .- MB_total[abl])) < 1e-3
+
+        # Nothing is ever applied to a bare bed, whichever sign the rate carries
+        bare = H .<= 0
+        count(bare) > 0 && @test all(MB_int[bare] .== 0)
+
+        # Inside the bands a ramp only ever damps the rate, and never flips it
+        @test all(abs.(MB_int) .<= abs.(MB_total) .+ 1e-3)
+        signif = abs.(MB_total) .> 1e-6
+        @test all(MB_int[signif] .* MB_total[signif] .>= 0)
+    end
+
+    # The thin accumulating cells are the point of this test, so it must not be vacuous
+    @test n_thin_acc > 100
 end
 
 """
