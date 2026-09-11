@@ -1,4 +1,4 @@
-export MBcache, ElevationLUT, MB_rate!, MB_rate_∂H!, MB_rate_∂H_maxabs,
+export MBcache, ElevationLUT, MB_rate!, MB_rate_∂H!,
        build_elevation_lut, mb_S_dependence, smoothstep, smoothstep_∂, mb_cache_active
 
 import Sleipnir: init_mb_cache, mb_cache_type
@@ -170,39 +170,32 @@ end
     lut_lookup(lut::ElevationLUT, ΔS, k::Int)
 
 Positive degree days and solid precipitation at elevation offset `ΔS` in window `k`, by
-linear interpolation in the table.
-
-Throws a `DomainError`, rather than clamping, if `ΔS` is outside the tabulated range or not
-finite — clamping would quietly return a wrong mass balance.
+linear interpolation in the table. Calls [`lut_lookup_∂`](@ref) and discards the
+derivatives — the interpolation already computes them as intermediates, so this costs
+nothing extra.
 """
-@inline function lut_lookup(lut::ElevationLUT, ΔS::R, k::Int) where {R <: Real}
-    n_e = size(lut.PDD, 1)
-    x = (ΔS - lut.ΔS_min) * lut.inv_dΔS
-    (isfinite(x) && zero(R) <= x <= R(n_e - 1)) || _lut_range_error(lut, ΔS)
-    # The index carries no derivative; sensitivity to ΔS flows through the weight w, which
-    # stays of type R.
-    i = floor(Int, x)
-    i = i > n_e - 2 ? n_e - 2 : i
-    w = x - i
-    i1 = i + 1
-    @inbounds begin
-        pdd = lut.PDD[i1, k] + w * (lut.PDD[i1 + 1, k] - lut.PDD[i1, k])
-        snow = lut.snow[i1, k] + w * (lut.snow[i1 + 1, k] - lut.snow[i1, k])
-    end
+@inline function lut_lookup(lut::ElevationLUT, ΔS::Real, k::Int)
+    pdd, snow, _, _ = lut_lookup_∂(lut, ΔS, k)
     return pdd, snow
 end
 
 """
     lut_lookup_∂(lut::ElevationLUT, ΔS, k)
 
-Same as [`lut_lookup`](@ref) but also returns the derivatives of `PDD` and `snow` with
-respect to `ΔS`. The table is piecewise linear, so the slope of the bracketing segment is
-the exact derivative, not an approximation of it.
+Positive degree days and solid precipitation at elevation offset `ΔS` in window `k`, by
+linear interpolation in the table, together with their derivatives with respect to `ΔS`.
+The table is piecewise linear, so the slope of the bracketing segment is the exact
+derivative, not an approximation of it.
+
+Throws a `DomainError`, rather than clamping, if `ΔS` is outside the tabulated range or not
+finite — clamping would quietly return a wrong mass balance.
 """
 @inline function lut_lookup_∂(lut::ElevationLUT, ΔS::R, k::Int) where {R <: Real}
     n_e = size(lut.PDD, 1)
     x = (ΔS - lut.ΔS_min) * lut.inv_dΔS
     (isfinite(x) && zero(R) <= x <= R(n_e - 1)) || _lut_range_error(lut, ΔS)
+    # The index carries no derivative; sensitivity to ΔS flows through the weight w, which
+    # stays of type R.
     i = floor(Int, x)
     i = i > n_e - 2 ? n_e - 2 : i
     w = x - i
@@ -456,54 +449,6 @@ function MB_rate_∂H!(∂ṁ, H, cache::MBcache, mb_model::MBmodel,
         "Mass balance model $(typeof(mb_model)) has no ice thickness derivative for the " *
         "ice flow RHS (mb_S_dependence = :$(mb_S_dependence(mb_model)))."))
 end
-
-"""
-    MB_rate_∂H_maxabs(H, cache::MBcache, mb_model, glacier, t)
-
-Largest `|∂ṁ/∂H|` over the grid, in yr⁻¹, without materialising the derivative.
-
-Feeds the mass balance contribution to the spectral radius, for a stabilised solver to size
-its stages. A reduction rather than [`MB_rate_∂H!`](@ref) followed by `maximum`, because it
-runs inside a differentiated region every step — allocating and writing a buffer there is
-what upsets reverse mode.
-"""
-function MB_rate_∂H_maxabs(H, cache::MBcache, mb_model::TImodel1,
-        glacier::Sleipnir.AbstractGlacier, t::Real)
-    mb_cache_active(cache) || return zero(eltype(H))
-
-    k = window_index(cache, t)
-    B = glacier.B
-    DDF = mb_model.DDF
-    inv_step = 1 / cache.step_MB
-    c_prcp = PRECIP_UNIT_CONVERSION * mb_model.prcp_fac
-    lut = cache.lut
-    ref_hgt = cache.ref_hgt
-    H_acc = cache.H_acc
-    inv_H_acc_w = 1 / cache.H_acc_w
-    inv_H_abl = 1 / cache.H_abl
-
-    length(H) == length(B) || throw(DimensionMismatch(
-        "Ice thickness has $(length(H)) entries but the bed has $(length(B))."))
-
-    λ = zero(eltype(H))
-    # Linear indexing, not (i, j): the solver hands back a flat vector, and the bed shares
-    # its layout. 2D indexing here reads out of bounds, which `@inbounds` turns into silent
-    # garbage rather than an error.
-    @inbounds for idx in eachindex(H)
-        h = H[idx]
-        h > 0 || continue
-        ΔS = B[idx] + h - ref_hgt
-        pdd, snow, ∂pdd, ∂snow = lut_lookup_∂(lut, ΔS, k)
-        rate = (c_prcp * snow - DDF * pdd) * inv_step
-        ∂rate = (c_prcp * ∂snow - DDF * ∂pdd) * inv_step
-        inv_H = rate > 0 ? inv_H_acc_w : inv_H_abl
-        x = rate > 0 ? (h - H_acc) * inv_H_acc_w + oftype(h, 0.5) : h * inv_H_abl
-        a = abs(∂rate * smoothstep(x) + rate * smoothstep_∂(x) * inv_H)
-        λ = a > λ ? a : λ
-    end
-    return λ
-end
-MB_rate_∂H_maxabs(H, cache::MBcache, mb_model::MBmodel, glacier, t::Real) = zero(eltype(H))
 
 """
     MB_rate!(ṁ, H, cache::MBcache, mb_model::MBmodel, glacier, t)
