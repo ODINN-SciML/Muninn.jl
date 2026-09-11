@@ -3,19 +3,14 @@ export MBcache, ElevationLUT, MB_rate!, MB_rate_∂H!, MB_rate_∂H_maxabs,
 
 import Sleipnir: init_mb_cache, mb_cache_type
 
-# Ice thickness scales (m) controlling where the mass balance rate is allowed to act.
+# Ice thickness scales (m) that gate where the mass balance rate acts.
 #
-# Ablation is ramped in from zero over `H_ABL_DEFAULT` so that a cell cannot melt through the
-# bed. Phase 0 measured the final H to be insensitive to it between 0.5 m and 1.0 m
-# (RMS 0.009 m) and to move noticeably only at 5.0 m, which fixes the default here.
+# Ablation ramps from zero over `H_ABL_DEFAULT`, so a cell can't melt through the bed.
 #
-# Accumulation is switched on around `H_ACC_DEFAULT`, over a width `H_ACC_W_DEFAULT`: the
-# ramp is centred on the threshold rather than rising from zero. Feeding thin ice is what
-# lets a marginal cell in the accumulation area thicken by snowfall until the flux spills it
-# over a divide into the neighbouring catchment, so the switch has to sit at the threshold,
-# not average half of it across everything thinner. The width only has to be wide enough to
-# be differentiable: at `H_ABL_DEFAULT` it costs nothing, since the bound on `∂ṁ/∂H` is set
-# by the narrower of the two ramps.
+# Accumulation switches on centred on `H_ACC_DEFAULT`, over a width `H_ACC_W_DEFAULT` —
+# not ramped from zero. A marginal accumulation cell must reach the full rate before it can
+# thicken enough to spill ice over a divide into the neighbouring catchment; ramping from
+# zero would feed such cells at half rate long before that.
 const H_ACC_DEFAULT = Sleipnir.Float(10.0)
 const H_ACC_W_DEFAULT = Sleipnir.Float(1.0)
 const H_ABL_DEFAULT = Sleipnir.Float(1.0)
@@ -47,12 +42,10 @@ mb_S_dependence(::TImodel1) = :elevation_only
 
 Cubic Hermite ramp `x²(3 - 2x)`, clamped to `[0, 1]`.
 
-Used to fade the mass balance rate in and out with ice thickness. The discrete scheme
-applies a hard mask (`apply_MB_mask!`), which is fine for a callback but is a step
-discontinuity in `H` when the same quantity becomes a source term in the RHS: an adaptive
-error controller cannot resolve it, and an adjoint sees a derivative that is zero almost
-everywhere and undefined on a set of measure zero. This ramp is C¹ with a bounded
-derivative of at most `1.5` over the ramp width.
+Fades the mass balance rate in and out with ice thickness. A hard mask (as
+`apply_MB_mask!` applies) is a step discontinuity in `H`, which as a source term is
+unresolvable by an adaptive controller and undifferentiable for an adjoint. This ramp is C¹,
+with derivative bounded by `1.5` over its width.
 """
 @inline function smoothstep(x::R) where {R <: Real}
     x <= zero(R) && return zero(R)
@@ -83,10 +76,9 @@ PDD(ΔS)  = Σ_d max(0, T_d + g_d·ΔS)
 snow(ΔS) = Σ_d p_d·clamp((2 - T_d - g_d·ΔS)/2, 0, 1)
 ```
 
-so a uniform table with linear interpolation is exact except within one cell of a
-breakpoint. Phase 0 measured the resulting error on a monthly mass balance at 7.1e-5 m for
-`dΔS = 1` m, and the lookup at roughly an eighth of the cost of one `SIA2D!` call, against
-ten times that for the equivalent daily loop.
+so linear interpolation on a uniform table is exact except within one cell of a breakpoint.
+Monthly mass balance error from the table is 7.1e-5 m at `dΔS = 1` m; the lookup costs about
+an eighth of one `SIA2D!` call, versus ten times that for the daily loop it replaces.
 
 # Fields
 
@@ -168,12 +160,10 @@ end
 
 @noinline function _lut_range_error(lut::ElevationLUT, ΔS)
     throw(DomainError(ΔS,
-        "Elevation offset ΔS = $(ΔS) m falls outside the mass balance lookup table " *
-        "range [$(lut.ΔS_min), $(lut.ΔS_max)] m. The table is sized from the elevations " *
-        "the glacier can reach plus a $(LUT_PAD_DEFAULT) m pad, so this means either the " *
-        "ice surface left that range or the solve diverged. The table is never " *
-        "extrapolated silently: constant extrapolation is exact only above the range, " *
-        "since PDD keeps growing linearly as ΔS decreases."))
+        "Elevation offset ΔS = $(ΔS) m is outside the lookup table range " *
+        "[$(lut.ΔS_min), $(lut.ΔS_max)] m (glacier elevations ± $(LUT_PAD_DEFAULT) m pad). " *
+        "Either the surface left that range or the solve diverged; extrapolating would be " *
+        "wrong since PDD keeps growing linearly as ΔS decreases."))
 end
 
 """
@@ -182,9 +172,8 @@ end
 Positive degree days and solid precipitation at elevation offset `ΔS` in window `k`, by
 linear interpolation in the table.
 
-Throws a `DomainError` if `ΔS` is outside the tabulated range or is not finite, rather than
-clamping. Clamping would quietly return a wrong mass balance, and a diverging solve would
-then surface much later as an unexplained result.
+Throws a `DomainError`, rather than clamping, if `ΔS` is outside the tabulated range or not
+finite — clamping would quietly return a wrong mass balance.
 """
 @inline function lut_lookup(lut::ElevationLUT, ΔS::R, k::Int) where {R <: Real}
     n_e = size(lut.PDD, 1)
@@ -237,10 +226,9 @@ The RHS is called many times per mass balance window and must not touch `Rasters
 climate is sliced up front into [`ClimateWindow`](@ref)s and, for models whose rate depends
 on the surface only through `ΔS`, collapsed further into an [`ElevationLUT`](@ref).
 
-An *empty* cache (no windows, empty table) is what gets built when mass balance is switched
-off. Keeping the type the same either way means `ModelCache` stays concretely typed and a run
-without mass balance pays neither the memory nor the build time. Use
-[`mb_cache_active`](@ref) to tell them apart.
+An empty cache (no windows, empty table) is built when mass balance is off, keeping
+`ModelCache` concretely typed either way — a run without mass balance pays neither the
+memory nor the build time. Use [`mb_cache_active`](@ref) to tell them apart.
 
 # Fields
 
@@ -285,10 +273,9 @@ mb_cache_active(::Nothing) = false
 Upper bound on `|∂ṁ/∂H|` over the whole table, in yr⁻¹.
 
 This is the mass balance contribution to the spectral radius of the ice flow right hand side.
-It is deliberately a *state-independent* bound computed once, rather than the exact maximum at
-the current state: a stabilised solver only needs an upper bound to size its stages, and
-anything that reads the state cannot be evaluated where the solver hands back an augmented
-`[H; θ]` vector, as the adjoint does.
+It's a state-independent bound, not the exact maximum at the current state: a stabilised
+solver only needs an upper bound to size its stages, and the adjoint hands the RHS an
+augmented `[H; θ]` vector that a state-dependent version couldn't read anyway.
 
 From `ṁ = rate(ΔS)·ramp(H)`, with `ramp ≤ 1` and `ramp' ≤ 1.5/w` for a ramp of width `w`,
 taking the narrower of the accumulation and ablation ramps:
@@ -337,16 +324,13 @@ end
 
 Index of the mass balance window containing time `t`.
 
-Window `k` spans `(t₀ + (k-1)·step, t₀ + k·step]`, matching the times at which the discrete
-scheme applies its jumps, so the continuous source term uses exactly the same climate over
-exactly the same intervals. Times at or before `t₀` map to the first window and times past
-the end map to the last.
+Window `k` spans `(t₀ + (k-1)·step, t₀ + k·step]`. Times at or before `t₀` map to the first
+window and times past the end map to the last.
 """
 @inline function window_index(cache::MBcache, t::Real)
-    # The nudge makes the interval right-closed even in floating point. Landing exactly on
-    # a window edge is the common case, not a rare one: those times are solver tstops,
-    # because the source term is discontinuous in t there. Without it, whether t_k belongs
-    # to window k or k+1 would come down to the last bit of (t - t₀)/step.
+    # The nudge makes the interval right-closed in floating point. Landing on a window edge
+    # is common, not rare — those times are solver tstops, since the source term is
+    # discontinuous in t there. Without it, which window t_k belongs to comes down to rounding.
     k = ceil(Int, (t - cache.t₀) / cache.step_MB - 1e-9)
     n = length(cache.windows)
     return k < 1 ? 1 : (k > n ? n : k)
@@ -357,23 +341,20 @@ end
 
 Write the instantaneous mass balance rate `ṁ(H, t)`, in m/yr, into `ṁ`.
 
-This is the continuous counterpart of `compute_MB`: where the latter returns the mass
-balance accumulated over a whole window, to be applied as a jump, this returns the rate at
-which it accrues, to be added to `∂H/∂t`. Integrating the rate over a window with a frozen
-surface reproduces `compute_MB` exactly; the two differ once `H` evolves within a window,
-which is precisely the operator-splitting error the continuous form removes.
+Rate form of `compute_MB`: that returns the balance accumulated over a window, for
+calibration and diagnostics; this returns the rate at which it accrues, to add to `∂H/∂t`.
+Integrating the rate over a window with `H` frozen reproduces `compute_MB` exactly; letting
+`H` evolve within the window is the operator-splitting error this avoids.
 
-The rate depends on `H` through the surface `S = B + H`, and that dependence is what an
-adjoint needs even when no mass balance parameter is being trained: `∂ṁ/∂H` is the elevation
-feedback, it sits in the adjoint Jacobian, and so it reaches the gradient with respect to
-ice flow parameters such as `A`.
+`ṁ` depends on `H` through `S = B + H`, so `∂ṁ/∂H` (the elevation feedback) reaches the
+gradient with respect to ice flow parameters like `A` even when no mass balance parameter is
+trained.
 
-`DDF` and `prcp_fac` are read from `mb_model` on every call rather than from the cache, so
-they remain free to change without invalidating the lookup table. `temp_bias` is baked into
-the table and is checked against the cache instead.
+`DDF` and `prcp_fac` come from `mb_model` on every call, so they can change without
+invalidating the lookup table; `temp_bias` is baked into the table and checked against the
+cache instead.
 
-`ṁ` is fully overwritten, never accumulated into, so the caller owns how it is combined
-with the rest of the RHS.
+`ṁ` is overwritten, not accumulated into — the caller combines it with the rest of the RHS.
 """
 function MB_rate!(
         ṁ, H, cache::MBcache, mb_model::TImodel1,
@@ -418,19 +399,18 @@ end
 Fill `∂ṁ` with the derivative of the mass balance rate with respect to the ice thickness,
 in-place.
 
-`ṁ` at a cell depends only on that cell's `H`, through the surface elevation `S = B + H` and
-through the ramp, so the Jacobian is diagonal and this single matrix describes it fully. A
-vector-Jacobian product is then an elementwise multiplication.
+`ṁ` at a cell depends only on that cell's `H`, through `S = B + H` and through the ramp, so
+the Jacobian is diagonal and a vector-Jacobian product is just an elementwise multiply.
 
-Both factors of `ṁ = rate(ΔS) · ramp(H)` carry the dependence, so the product rule gives
+From `ṁ = rate(ΔS) · ramp(H)` and `∂ΔS/∂H = 1`, the product rule gives
 
 ```math
 ∂ṁ/∂H = \\frac{∂rate}{∂ΔS} ramp + rate \\frac{∂ramp}{∂H}
 ```
 
-using `∂ΔS/∂H = 1`. Below the ice margin both terms vanish, so the derivative is continuous
-there. This is what the elevation feedback contributes to the adjoint; the automatic
-sensitivity path differentiates [`MB_rate!`](@ref) directly and does not need it.
+Both terms vanish below the ice margin, so the derivative is continuous there. Only manual
+adjoints need this; the automatic sensitivity path differentiates [`MB_rate!`](@ref)
+directly.
 """
 function MB_rate_∂H!(
         ∂ṁ, H, cache::MBcache, mb_model::TImodel1,
@@ -482,11 +462,10 @@ end
 
 Largest `|∂ṁ/∂H|` over the grid, in yr⁻¹, without materialising the derivative.
 
-This is the mass balance contribution to the spectral radius of the ice flow right hand side,
-so a stabilised solver can size its stages. It is deliberately a reduction rather than
-[`MB_rate_∂H!`](@ref) followed by a `maximum`: it is called once per step, and it has to be
-safe to call from inside a differentiated region, where allocating a buffer and writing to it
-is exactly what upsets reverse mode.
+Feeds the mass balance contribution to the spectral radius, for a stabilised solver to size
+its stages. A reduction rather than [`MB_rate_∂H!`](@ref) followed by `maximum`, because it
+runs inside a differentiated region every step — allocating and writing a buffer there is
+what upsets reverse mode.
 """
 function MB_rate_∂H_maxabs(H, cache::MBcache, mb_model::TImodel1,
         glacier::Sleipnir.AbstractGlacier, t::Real)
@@ -507,9 +486,9 @@ function MB_rate_∂H_maxabs(H, cache::MBcache, mb_model::TImodel1,
         "Ice thickness has $(length(H)) entries but the bed has $(length(B))."))
 
     λ = zero(eltype(H))
-    # Linear indexing, not (i, j): a solver hands its state back as a flat vector, and the bed
-    # shares its layout. Indexing in two dimensions reads out of bounds there, which
-    # `@inbounds` turns into silent garbage rather than an error.
+    # Linear indexing, not (i, j): the solver hands back a flat vector, and the bed shares
+    # its layout. 2D indexing here reads out of bounds, which `@inbounds` turns into silent
+    # garbage rather than an error.
     @inbounds for idx in eachindex(H)
         h = H[idx]
         h > 0 || continue
@@ -542,18 +521,16 @@ end
 """
     init_mb_cache(mb_model::TImodel1, simulation, glacier_idx, θ)
 
-Build the [`MBcache`](@ref) for one glacier.
+Build the [`MBcache`](@ref) for one glacier. Returns an empty cache when mass balance is off.
 
-Returns an empty cache when mass balance is switched off.
-
-The lookup table is sized from the elevations the glacier can reach — the lowest bed and the
-highest initial surface — padded either side. The pad is what absorbs a surface that
-thickens beyond its initial state or a bed that emerges below the current minimum; going
-outside it throws rather than extrapolating.
+The lookup table spans the elevations the glacier can reach — lowest bed to highest initial
+surface — padded either side, to absorb thickening beyond the initial state or a bed
+emerging below the current minimum. Going outside that range throws rather than
+extrapolating.
 """
 function init_mb_cache(mb_model::TImodel1, simulation, glacier_idx::Integer, θ)
     F = Sleipnir.Float
-    # A simulation stand-in that carries no parameters cannot ask for the continuous scheme
+    # A stand-in simulation with no parameters isn't requesting the continuous scheme
     hasproperty(simulation, :parameters) || return _empty_mb_cache(F)
     simparams = simulation.parameters.simulation
     simparams.use_MB || return _empty_mb_cache(F)

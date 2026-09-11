@@ -231,7 +231,7 @@ function mb_rate_matches_compute_MB_test()
 end
 
 """
-Check `MB_rate!` against the mask the discrete scheme applies, over the whole field rather
+Check `MB_rate!` against the mask `apply_MB_mask!` applies, over the whole field rather
 than only where the ramps saturate.
 
 This is what pins the ramps to the thresholds they claim. `apply_MB_mask!` allows accumulation
