@@ -159,4 +159,5 @@ function Base.show(io::IO, model::TImodel2)
 end
 
 include("mass_balance_utils.jl")
+include("mass_balance_rhs.jl")
 include("calibration.jl")
