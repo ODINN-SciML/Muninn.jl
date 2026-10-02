@@ -44,8 +44,10 @@ Cubic Hermite ramp `x²(3 - 2x)`, clamped to `[0, 1]`.
 
 Fades the mass balance rate in and out with ice thickness. A hard mask (as
 `apply_MB_mask!` applies) is a step discontinuity in `H`, which as a source term is
-unresolvable by an adaptive controller and undifferentiable for an adjoint. This ramp is C¹,
-with derivative bounded by `1.5` over its width.
+unresolvable by an adaptive controller and undifferentiable for an adjoint. This ramp is C¹:
+its derivative `6x(1 - x)` is zero at both ends, so it joins the constant parts smoothly. It
+is not C², since the second derivative jumps at the ends. Its derivative is at most `1.5`
+over its width.
 """
 @inline function smoothstep(x::R) where {R <: Real}
     x <= zero(R) && return zero(R)
