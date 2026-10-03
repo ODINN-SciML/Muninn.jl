@@ -131,8 +131,9 @@ A static glacier geometry is assumed throughout (no ice-flow dynamics).
   - `temp_bias_bounds`: Search interval for the temperature bias (°C).
     Default: from `params.physical`.
   - `density_ratio`: Conversion factor applied to `glacier.dhdtData.dhdt`.  Use
-    `params.physical.ρ / params.physical.ρ_w ≈ 0.9` when the data are in m ice yr⁻¹, or `1.0`
-    (default) for m w.e. yr⁻¹ (Hugonnet et al. 2021).
+    `params.physical.ρ_geodetic / params.physical.ρ_w` (= 0.85) when the data are in m ice yr⁻¹,
+    or `1.0` (default) for m w.e. yr⁻¹ (Hugonnet et al. 2021). Do not use the ice-flow
+    density `params.physical.ρ` here.
   - `calibration_period`: Time window `(t_start, t_end)` in fractional years.
     Defaults to `glacier.dhdtData.t`.
   - `prcp_fac`: Precipitation factor used in the DDF step. `:from_winter_prcp`
