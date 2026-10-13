@@ -104,12 +104,12 @@ function elevation_lut_test()
 
     # Out of range throws instead of extrapolating: constant extrapolation is exact only
     # above the range, since PDD keeps growing linearly as ΔS decreases.
-    @test_throws DomainError Muninn.lut_lookup(lut, -1500.1, 1)
-    @test_throws DomainError Muninn.lut_lookup(lut, lut.ΔS_max + 0.1, 1)
+    @test_throws Muninn.ElevationOutOfRange Muninn.lut_lookup(lut, -1500.1, 1)
+    @test_throws Muninn.ElevationOutOfRange Muninn.lut_lookup(lut, lut.ΔS_max + 0.1, 1)
     # A diverging solve sends ΔS to absurd values; it must surface here, not as an
     # InexactError inside the index conversion.
-    @test_throws DomainError Muninn.lut_lookup(lut, 1e24, 1)
-    @test_throws DomainError Muninn.lut_lookup(lut, NaN, 1)
+    @test_throws Muninn.ElevationOutOfRange Muninn.lut_lookup(lut, 1e24, 1)
+    @test_throws Muninn.ElevationOutOfRange Muninn.lut_lookup(lut, NaN, 1)
 
     @test_throws ArgumentError build_elevation_lut(windows, 100.0, 100.0, 0.0)
     @test_throws ArgumentError build_elevation_lut(windows, -10.0, 10.0, 0.0; dΔS = 0.0)
@@ -140,6 +140,20 @@ function mb_cache_init_test()
     ΔS_hi = maximum(s.glacier.B .+ s.glacier.H₀) - cache.ref_hgt
     @test cache.lut.ΔS_min <= ΔS_lo - Muninn.LUT_PAD_DEFAULT + 1e-6
     @test cache.lut.ΔS_max >= ΔS_hi + Muninn.LUT_PAD_DEFAULT - 1e-6
+
+    # A glacier with its own time window, not a whole number of steps: the windows start at
+    # its start, and the last window ends after its end.
+    s_window = _mb_rhs_setup()
+    t_start = 2010.0 + 0.3 * s_window.step_MB
+    s_window.params.simulation.glacier_tspans[s_window.glacier.rgi_id] = (t_start, 2010.9)
+    cache_window = Sleipnir.init_mb_cache(
+        s_window.mb_model, s_window.simulation, 1, nothing)
+    @test cache_window.t₀ == t_start
+    @test length(cache_window.windows) == 11
+    @test cache_window.windows[1].t_end ≈ t_start + s_window.step_MB
+    @test cache_window.windows[end].t_end > 2010.9
+    @test Muninn.window_index(cache_window, t_start + s_window.step_MB) == 1
+    @test Muninn.window_index(cache_window, 2010.9) == 11
 
     # Models with no RHS form are refused explicitly.
     @test_throws ArgumentError MB_rate!(

@@ -160,8 +160,19 @@ function build_elevation_lut(
         F(ΔS_min), F(ΔS_min) + (n_e - 1) * F(dΔS), F(dΔS), F(1 / dΔS), PDD, snow)
 end
 
+"""
+    ElevationOutOfRange(msg)
+
+Error thrown when the surface elevation leaves the range of the mass balance lookup table,
+for example because the ice flow solve diverged.
+"""
+struct ElevationOutOfRange <: Exception
+    msg::String
+end
+Base.showerror(io::IO, e::ElevationOutOfRange) = print(io, "ElevationOutOfRange: ", e.msg)
+
 @noinline function _lut_range_error(lut::ElevationLUT, ΔS)
-    throw(DomainError(ΔS,
+    throw(ElevationOutOfRange(
         "Elevation offset ΔS = $(ΔS) m is outside the lookup table range " *
         "[$(lut.ΔS_min), $(lut.ΔS_max)] m (glacier elevations ± $(LUT_PAD_DEFAULT) m pad). " *
         "Either the surface left that range or the solve diverged; extrapolating would be " *
@@ -189,8 +200,8 @@ linear interpolation in the table, together with their derivatives with respect 
 The table is piecewise linear, so the slope of the bracketing segment is the exact
 derivative, not an approximation of it.
 
-Throws a `DomainError`, rather than clamping, if `ΔS` is outside the tabulated range or not
-finite — clamping would quietly return a wrong mass balance.
+Throws an [`ElevationOutOfRange`](@ref), rather than clamping, if `ΔS` is outside the
+tabulated range or not finite — clamping would quietly return a wrong mass balance.
 """
 @inline function lut_lookup_∂(lut::ElevationLUT, ΔS::R, k::Int) where {R <: Real}
     n_e = size(lut.PDD, 1)
@@ -230,7 +241,8 @@ memory nor the build time. Use [`mb_cache_active`](@ref) to tell them apart.
   - `windows::Vector{ClimateWindow{F}}`: Climate per mass balance window, in time order.
   - `lut::ElevationLUT{F}`: Elevation lookup table, empty for `:general` models.
   - `ṁ::Matrix{F}`: Buffer holding the most recently computed rate, in m/yr.
-  - `t₀::F`, `step_MB::F`: Start of the run and the mass balance step, in decimal years.
+  - `t₀::F`, `step_MB::F`: Start of the time window of the glacier and the mass balance
+    step, in decimal years.
   - `ref_hgt::F`: Reference elevation of the climate data, in m.
   - `temp_bias::F`: Temperature bias baked into `lut`, in °C.
   - `H_acc::F`, `H_acc_w::F`: Ice thickness at which accumulation switches on, and the width
@@ -319,8 +331,9 @@ end
 
 Index of the mass balance window containing time `t`.
 
-Window `k` spans `(t₀ + (k-1)·step, t₀ + k·step]`. Times at or before `t₀` map to the first
-window and times past the end map to the last.
+Window `k` spans `(t₀ + (k-1)·step, t₀ + k·step]`, with `t₀` the start of the time window of
+the glacier. Times at or before `t₀` map to the first window and times past the end map to
+the last.
 """
 @inline function window_index(cache::MBcache, t::Real)
     # The nudge makes the interval right-closed in floating point. Landing on a window edge
@@ -470,6 +483,9 @@ end
 
 Build the [`MBcache`](@ref) for one glacier. Returns an empty cache when mass balance is off.
 
+The windows start at the start of the time window of the glacier (`glacier_tspan`). If this
+window is not a whole number of steps, the last window ends after it.
+
 The lookup table spans the elevations the glacier can reach — lowest bed to highest initial
 surface — padded either side, to absorb thickening beyond the initial state or a bed
 emerging below the current minimum. Going outside that range throws rather than
@@ -483,7 +499,7 @@ function init_mb_cache(mb_model::TImodel1, simulation, glacier_idx::Integer, θ)
     simparams.use_MB || return _empty_mb_cache(F)
 
     glacier = simulation.glaciers[glacier_idx]
-    tspan = simparams.tspan
+    tspan = glacier_tspan(simulation, glacier_idx)
     step_MB = simparams.step_MB
     temp_bias = F(get_temp_bias(mb_model))
 
