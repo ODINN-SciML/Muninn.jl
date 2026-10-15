@@ -241,6 +241,14 @@ function mb_rate_matches_compute_MB_test()
 
         Δ = abs.(MB_integrated[saturated] .- MB_total[saturated])
         @test maximum(Δ) < 1e-3
+
+        # The bed can be given, for an inverted bed: `glacier.B` is the default, and a lower
+        # bed lowers the surface, so the mass balance is not larger anywhere
+        ṁ_B = similar(cache.ṁ)
+        MB_rate!(ṁ_B, H, cache, mb_model, glacier, t_k, glacier.B)
+        @test ṁ_B == cache.ṁ
+        MB_rate!(ṁ_B, H, cache, mb_model, glacier, t_k, glacier.B .- 50.0)
+        @test all(ṁ_B .<= cache.ṁ .+ 1e-12)
     end
 end
 
