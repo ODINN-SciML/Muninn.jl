@@ -160,8 +160,19 @@ function build_elevation_lut(
         F(ΔS_min), F(ΔS_min) + (n_e - 1) * F(dΔS), F(dΔS), F(1 / dΔS), PDD, snow)
 end
 
+"""
+    ElevationOutOfRange(msg)
+
+Error thrown when the surface elevation leaves the range of the mass balance lookup table,
+for example because the ice flow solve diverged.
+"""
+struct ElevationOutOfRange <: Exception
+    msg::String
+end
+Base.showerror(io::IO, e::ElevationOutOfRange) = print(io, "ElevationOutOfRange: ", e.msg)
+
 @noinline function _lut_range_error(lut::ElevationLUT, ΔS)
-    throw(DomainError(ΔS,
+    throw(ElevationOutOfRange(
         "Elevation offset ΔS = $(ΔS) m is outside the lookup table range " *
         "[$(lut.ΔS_min), $(lut.ΔS_max)] m (glacier elevations ± $(LUT_PAD_DEFAULT) m pad). " *
         "Either the surface left that range or the solve diverged; extrapolating would be " *
@@ -189,8 +200,8 @@ linear interpolation in the table, together with their derivatives with respect 
 The table is piecewise linear, so the slope of the bracketing segment is the exact
 derivative, not an approximation of it.
 
-Throws a `DomainError`, rather than clamping, if `ΔS` is outside the tabulated range or not
-finite — clamping would quietly return a wrong mass balance.
+Throws an [`ElevationOutOfRange`](@ref), rather than clamping, if `ΔS` is outside the
+tabulated range or not finite — clamping would quietly return a wrong mass balance.
 """
 @inline function lut_lookup_∂(lut::ElevationLUT, ΔS::R, k::Int) where {R <: Real}
     n_e = size(lut.PDD, 1)
@@ -230,7 +241,8 @@ memory nor the build time. Use [`mb_cache_active`](@ref) to tell them apart.
   - `windows::Vector{ClimateWindow{F}}`: Climate per mass balance window, in time order.
   - `lut::ElevationLUT{F}`: Elevation lookup table, empty for `:general` models.
   - `ṁ::Matrix{F}`: Buffer holding the most recently computed rate, in m/yr.
-  - `t₀::F`, `step_MB::F`: Start of the run and the mass balance step, in decimal years.
+  - `t₀::F`, `step_MB::F`: Start of the time window of the glacier and the mass balance
+    step, in decimal years.
   - `ref_hgt::F`: Reference elevation of the climate data, in m.
   - `temp_bias::F`: Temperature bias baked into `lut`, in °C.
   - `H_acc::F`, `H_acc_w::F`: Ice thickness at which accumulation switches on, and the width
@@ -319,8 +331,9 @@ end
 
 Index of the mass balance window containing time `t`.
 
-Window `k` spans `(t₀ + (k-1)·step, t₀ + k·step]`. Times at or before `t₀` map to the first
-window and times past the end map to the last.
+Window `k` spans `(t₀ + (k-1)·step, t₀ + k·step]`, with `t₀` the start of the time window of
+the glacier. Times at or before `t₀` map to the first window and times past the end map to
+the last.
 """
 @inline function window_index(cache::MBcache, t::Real)
     # The nudge makes the interval right-closed in floating point. Landing on a window edge
@@ -332,9 +345,10 @@ window and times past the end map to the last.
 end
 
 """
-    MB_rate!(ṁ, H, cache::MBcache, mb_model::TImodel1, glacier, t)
+    MB_rate!(ṁ, H, cache::MBcache, mb_model::TImodel1, glacier, t, B = glacier.B)
 
-Write the instantaneous mass balance rate `ṁ(H, t)`, in m/yr, into `ṁ`.
+Write the instantaneous mass balance rate `ṁ(H, t)`, in m/yr, into `ṁ`. `B` is the bed
+elevation; pass it when the bed is not `glacier.B`, for example when it is inverted.
 
 Rate form of `compute_MB`: that returns the balance accumulated over a window, for
 calibration and diagnostics; this returns the rate at which it accrues, to add to `∂H/∂t`.
@@ -353,7 +367,7 @@ cache instead.
 """
 function MB_rate!(
         ṁ, H, cache::MBcache, mb_model::TImodel1,
-        glacier::Sleipnir.AbstractGlacier, t::Real)
+        glacier::Sleipnir.AbstractGlacier, t::Real, B = glacier.B)
     mb_cache_active(cache) || throw(ArgumentError(
         "MB_rate! called with an inactive mass balance cache. The cache is only " *
         "populated when use_MB is true."))
@@ -362,7 +376,6 @@ function MB_rate!(
         "the $(cache.temp_bias) °C baked into the lookup table. Rebuild the cache."))
 
     k = window_index(cache, t)
-    B = glacier.B
     DDF = mb_model.DDF
     # compute_MB divides the window total by step/(1/12) to express it per month; the rate
     # form instead divides by the window length to express it per year.
@@ -389,10 +402,10 @@ function MB_rate!(
 end
 
 """
-    MB_rate_∂H!(∂ṁ, H, cache::MBcache, mb_model, glacier, t)
+    MB_rate_∂H!(∂ṁ, H, cache::MBcache, mb_model, glacier, t, B = glacier.B)
 
 Fill `∂ṁ` with the derivative of the mass balance rate with respect to the ice thickness,
-in-place.
+in-place. `B` is the bed elevation, as in [`MB_rate!`](@ref).
 
 `ṁ` at a cell depends only on that cell's `H`, through `S = B + H` and through the ramp, so
 the Jacobian is diagonal and a vector-Jacobian product is just an elementwise multiply.
@@ -409,7 +422,7 @@ directly.
 """
 function MB_rate_∂H!(
         ∂ṁ, H, cache::MBcache, mb_model::TImodel1,
-        glacier::Sleipnir.AbstractGlacier, t::Real)
+        glacier::Sleipnir.AbstractGlacier, t::Real, B = glacier.B)
     mb_cache_active(cache) || throw(ArgumentError(
         "MB_rate_∂H! called with an inactive mass balance cache. The cache is only " *
         "populated when use_MB is true."))
@@ -418,7 +431,6 @@ function MB_rate_∂H!(
         "the $(cache.temp_bias) °C baked into the lookup table. Rebuild the cache."))
 
     k = window_index(cache, t)
-    B = glacier.B
     DDF = mb_model.DDF
     inv_step = 1 / cache.step_MB
     c_prcp = PRECIP_UNIT_CONVERSION * mb_model.prcp_fac
@@ -446,19 +458,19 @@ function MB_rate_∂H!(
     return nothing
 end
 function MB_rate_∂H!(∂ṁ, H, cache::MBcache, mb_model::MBmodel,
-        glacier::Sleipnir.AbstractGlacier, t::Real)
+        glacier::Sleipnir.AbstractGlacier, t::Real, B = glacier.B)
     throw(ArgumentError(
         "Mass balance model $(typeof(mb_model)) has no ice thickness derivative for the " *
         "ice flow RHS (mb_S_dependence = :$(mb_S_dependence(mb_model)))."))
 end
 
 """
-    MB_rate!(ṁ, H, cache::MBcache, mb_model::MBmodel, glacier, t)
+    MB_rate!(ṁ, H, cache::MBcache, mb_model::MBmodel, glacier, t, B = glacier.B)
 
 Fallback for mass balance models that have no RHS form yet.
 """
 function MB_rate!(ṁ, H, cache::MBcache, mb_model::MBmodel,
-        glacier::Sleipnir.AbstractGlacier, t::Real)
+        glacier::Sleipnir.AbstractGlacier, t::Real, B = glacier.B)
     throw(ArgumentError(
         "Mass balance model $(typeof(mb_model)) cannot be evaluated as a source term in " *
         "the ice flow RHS (mb_S_dependence = :$(mb_S_dependence(mb_model))). Implement " *
@@ -469,6 +481,9 @@ end
     init_mb_cache(mb_model::TImodel1, simulation, glacier_idx, θ)
 
 Build the [`MBcache`](@ref) for one glacier. Returns an empty cache when mass balance is off.
+
+The windows start at the start of the time window of the glacier (`glacier_tspan`). If this
+window is not a whole number of steps, the last window ends after it.
 
 The lookup table spans the elevations the glacier can reach — lowest bed to highest initial
 surface — padded either side, to absorb thickening beyond the initial state or a bed
@@ -483,7 +498,7 @@ function init_mb_cache(mb_model::TImodel1, simulation, glacier_idx::Integer, θ)
     simparams.use_MB || return _empty_mb_cache(F)
 
     glacier = simulation.glaciers[glacier_idx]
-    tspan = simparams.tspan
+    tspan = glacier_tspan(simulation, glacier_idx)
     step_MB = simparams.step_MB
     temp_bias = F(get_temp_bias(mb_model))
 
