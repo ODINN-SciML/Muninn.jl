@@ -21,10 +21,47 @@ function get_mb_model(mb_models::AbstractVector{<:MBmodel}, glacier_idx::Integer
     return mb_models[glacier_idx]
 end
 
+"""
+    requires_dynamic_topography(model::MBmodel)
+
+Return `true` if the mass balance `model` needs the glacier topography (slope,
+aspect) to be updated dynamically during the simulation, `false` otherwise.
+Defaults to `false`.
+"""
 requires_dynamic_topography(::MBmodel) = false
+
+"""
+    topography_window_m(model::MBmodel)
+
+Return the size in meters of the window used to compute the local topography
+derivatives (slope, aspect) when `requires_dynamic_topography` is `true`.
+Defaults to `200.0`.
+"""
 topography_window_m(::MBmodel) = Sleipnir.Float(200.0)
+
+"""
+    mb_inputs(model::MBmodel)
+
+Return a `NamedTuple` of the `Sleipnir.AbstractInput`s needed by the mass balance
+`model` (e.g. climate variables, slope, aspect). Defaults to an empty `NamedTuple`
+(no extra inputs).
+"""
 mb_inputs(::MBmodel) = (;)
+
+"""
+    required_climate_data_source(model::MBmodel)
+
+Return the `Symbol` of the climate data source required by the mass balance `model`
+(e.g. `:ERA5`), or `nothing` if any source is accepted. Defaults to `nothing`.
+"""
 required_climate_data_source(::MBmodel) = nothing
+
+"""
+    get_temp_bias(model::MBmodel)
+
+Return the temperature bias (in K) applied by the mass balance `model`.
+Defaults to `0.0`; `TImodel1` returns its own `temp_bias` field.
+"""
 get_temp_bias(::MBmodel) = Sleipnir.Float(0.0)
 get_temp_bias(mb::TImodel1) = mb.temp_bias
 
